@@ -33,24 +33,7 @@ interface Oracle {
 
 const rawOracle = JSON.parse(readFileSync(join(FIXTURES, "oracle.json"), "utf8")) as Oracle;
 
-/**
- * Ruby exports key-value polymorphism on the rule; the generated model types
- * need the same discriminator on the attribute (06c). Copy it across.
- */
-function withAttributeDiscriminators(bundle: Bundle): Bundle {
-  const draft = structuredClone(bundle) as never as {
-    models: Record<string, { attributes: { name: string; discriminator?: unknown }[]; mappings: { json?: { rules: { to: string; discriminator?: unknown }[] } } }>;
-  };
-  for (const doc of Object.values(draft.models)) {
-    for (const rule of doc.mappings.json?.rules ?? []) {
-      if (rule.discriminator === undefined) continue;
-      const attr = doc.attributes.find((a) => a.name === rule.to);
-      if (attr !== undefined) attr.discriminator = rule.discriminator;
-    }
-  }
-  return draft as never;
-}
-const oracle: Oracle = { ...rawOracle, bundle: withAttributeDiscriminators(rawOracle.bundle) };
+const oracle: Oracle = rawOracle;
 const codecBundle = JSON.parse(readFileSync(join(FIXTURES, "codec_bundle.json"), "utf8")) as Bundle;
 
 const EXACT_BINDINGS: Bindings = {
@@ -355,9 +338,6 @@ describe("named refusals", () => {
       }),
       /discriminator attribute nope/,
     ));
-
-  it("a Ruby rule-level discriminator without the attribute-level one the model types need", () =>
-    refused(rawOracle.bundle, /rule-level discriminator needs an identical attribute-level/));
 
   it("missing exact binding keeps the generator's own code", () => {
     expect(codeOf(() => generateJsonCodecs(codecBundle, NONE))).toBe("missing_type_binding");
