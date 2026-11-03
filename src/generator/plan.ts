@@ -2,6 +2,8 @@ import type {
   AttributeSpec,
   Bindings,
   Bundle,
+  Discriminator,
+  ModelDocument,
   ModelId,
   NeutralValue,
   TypeBinding,
@@ -295,6 +297,43 @@ function hashLiteral(value: NeutralValue, reject: Reject): string {
   return JSON.stringify(value);
 }
 
+function canonical(disc: Discriminator): string {
+  const cases = Object.keys(disc.cases).sort().map((k) => [k, disc.cases[k]]);
+  return JSON.stringify([disc.attribute, cases]);
+}
+
+/**
+ * The discriminator that governs an attribute: the attribute-level one and any
+ * rule-level one (how Ruby exports key-value polymorphism) on a rule targeting
+ * the attribute, in any format. All sources must agree; disagreement is refused.
+ */
+export function effectiveDiscriminator(
+  doc: ModelDocument | undefined,
+  attr: AttributeSpec,
+  modelId: string,
+): Discriminator | undefined {
+  const sources: { readonly from: string; readonly disc: Discriminator }[] = [];
+  if (attr.discriminator !== undefined) sources.push({ from: "attribute", disc: attr.discriminator });
+  for (const [format, mapping] of Object.entries(doc?.mappings ?? {})) {
+    const rules = (mapping as { readonly rules?: readonly { readonly to?: string; readonly discriminator?: Discriminator }[] } | undefined)?.rules ?? [];
+    for (const rule of rules) {
+      if (rule.to === attr.name && rule.discriminator !== undefined) sources.push({ from: `${format} rule`, disc: rule.discriminator });
+    }
+  }
+  const [first, ...rest] = sources;
+  if (first === undefined) return undefined;
+  const clash = rest.find((source) => canonical(source.disc) !== canonical(first.disc));
+  if (clash !== undefined) {
+    return fail({
+      reason: "unsupported_mapping",
+      model_id: modelId,
+      attribute: attr.name,
+      detail: `discriminator of the ${first.from} disagrees with the ${clash.from}`,
+    });
+  }
+  return first.disc;
+}
+
 /** Resolves an attribute's element plan (type ref, discriminator, enum). */
 export function planAttribute(ctx: PlanContext, attr: AttributeSpec, modelId: string): ElementPlan {
   const { type } = attr;
@@ -305,7 +344,7 @@ export function planAttribute(ctx: PlanContext, attr: AttributeSpec, modelId: st
   } else if (type.kind === "value") {
     plan = ctx.valuePlan(type.id, modelId, attr.name);
   } else {
-    plan = modelPlan(ctx, type.id, attr, modelId);
+    plan = modelPlan(ctx, type.id, effectiveDiscriminator(ctx.bundle.models[modelId], attr, modelId), attr, modelId);
   }
   const values = (attr as AttributeSpec & { readonly values?: readonly NeutralValue[] }).values;
   if (values !== undefined && values !== null) {
@@ -317,11 +356,11 @@ export function planAttribute(ctx: PlanContext, attr: AttributeSpec, modelId: st
   return plan;
 }
 
-function modelPlan(ctx: PlanContext, id: ModelId, attr: AttributeSpec, modelId: string): ElementPlan {
+function modelPlan(ctx: PlanContext, id: ModelId, discriminator: Discriminator | undefined, attr: AttributeSpec, modelId: string): ElementPlan {
   const classOf = (target: ModelId, reason: "dangling_reference" | "unknown_discriminator"): string =>
     ctx.classNames.get(target) ??
     fail({ reason, model_id: modelId, attribute: attr.name, detail: `model ${target} is not in the bundle` });
-  if (attr.discriminator === undefined) {
+  if (discriminator === undefined) {
     const name = classOf(id, "dangling_reference");
     return {
       ts: name,
@@ -330,7 +369,7 @@ function modelPlan(ctx: PlanContext, id: ModelId, attr: AttributeSpec, modelId: 
     };
   }
   classOf(id, "dangling_reference");
-  const targets = [...new Set(Object.values(attr.discriminator.cases))].sort();
+  const targets = [...new Set(Object.values(discriminator.cases))].sort();
   if (targets.length === 0) {
     return fail({ reason: "unknown_discriminator", model_id: modelId, attribute: attr.name, detail: "no cases" });
   }
