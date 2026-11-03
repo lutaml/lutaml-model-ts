@@ -4,7 +4,6 @@ import { LmlError } from "../../src/contracts.js";
 import {
   add,
   canonicalDecimalString,
-  checkNativeFacets,
   compareDecimal,
   decimalCanonical,
   decimalLexical,
@@ -13,10 +12,10 @@ import {
   mul,
   parseDecimal,
   parseInteger,
+  MAX_DECIMAL_DIGITS,
   rational,
   rationalFromDecimalString,
   rationalToDecimalString,
-  resolveValueType,
   sub,
 } from "../../src/values/index.js";
 
@@ -115,43 +114,47 @@ describe("rejects non-portable lexical forms", () => {
   });
 });
 
-describe("value type bindings", () => {
-  const none = { types: {} };
-  it("native bases resolve without a binding", () => {
-    expect(resolveValueType("v", { base: "decimal", facets: { min: "0" } }, none).kind).toBe("native");
+describe("one facet vocabulary (REVIEW-TS-1 L10)", () => {
+  it("src/values keeps no second facet vocabulary: facets live in the generator", async () => {
+    const values = (await import("../../src/values/index.js")) as Record<string, unknown>;
+    for (const name of ["resolveValueType", "checkNativeFacets", "NATIVE_BASES"]) {
+      expect(values[name], name).toBeUndefined();
+    }
   });
-  it("xml_id and custom bases require an explicit binding", () => {
-    expect(reason(() => resolveValueType("Id@x", { base: "xml_id", facets: {} }, none))).toBe(
-      "missing_type_binding",
-    );
-    const bound = { types: { "Id@x": { module: "./ids.js", export: "XmlId" } } };
-    const r = resolveValueType("Id@x", { base: "xml_id", facets: { pattern: "[a-z]+" } }, bound);
-    expect(r).toMatchObject({ kind: "bound", binding: { export: "XmlId" } });
+});
+
+describe("bounded decimal parsing (REVIEW-TS-1 M3)", () => {
+  const digits = (n: number): string => "3." + "7".repeat(n - 1);
+
+  it("refuses an over-long lexical by name, quickly", () => {
+    const started = performance.now();
+    for (const lexical of [digits(40_000), "1".repeat(MAX_DECIMAL_DIGITS + 1), "0." + "0".repeat(MAX_DECIMAL_DIGITS)]) {
+      try {
+        parseDecimal(lexical);
+        throw new Error("expected a refusal");
+      } catch (e) {
+        expect(e).toBeInstanceOf(LmlError);
+        expect((e as LmlError).info).toMatchObject({ reason: "invalid_document", rule: "max_decimal_digits" });
+      }
+    }
+    expect(performance.now() - started).toBeLessThan(200);
   });
-  it("prototype keys are not bindings", () => {
-    expect(reason(() => resolveValueType("constructor", { base: "xml_id", facets: {} }, none))).toBe(
-      "missing_type_binding",
-    );
+
+  it("accepts the limit itself and parses it in bounded time (40,000 digits took 3.8 s before)", () => {
+    const started = performance.now();
+    const d = parseDecimal(digits(MAX_DECIMAL_DIGITS));
+    expect(d.value.denominator > 0n).toBe(true);
+    expect(performance.now() - started).toBeLessThan(500);
   });
-  it("unknown facet on a native base rejects", () => {
-    expect(reason(() => resolveValueType("v", { base: "string", facets: { bogus: 1 } }, none))).toBe(
-      "unsupported_type",
-    );
-    expect(reason(() => resolveValueType("v", { base: "decimal", facets: { max_length: 3 } }, none))).toBe(
-      "unsupported_type",
-    );
-  });
-  it("numeric facets compare exactly, string facets validate", () => {
-    const dec = resolveValueType("d", { base: "decimal", facets: { min: "0.1", max: 2 } }, none);
-    expect(checkNativeFacets(dec, "0.10")).toBeNull();
-    expect(checkNativeFacets(dec, "0.0999999999999999999999")).toBe("below min");
-    expect(checkNativeFacets(dec, "2.0000000000000000001")).toBe("above max");
-    const int = resolveValueType("i", { base: "integer", facets: { values: ["9007199254740993", 1] } }, none);
-    expect(checkNativeFacets(int, "9007199254740993")).toBeNull();
-    expect(checkNativeFacets(int, "9007199254740992")).toBe("not in values");
-    const str = resolveValueType("s", { base: "string", facets: { min_length: 2, pattern: "[a-z]+" } }, none);
-    expect(checkNativeFacets(str, "ab")).toBeNull();
-    expect(checkNativeFacets(str, "a")).toBe("shorter than min_length");
-    expect(checkNativeFacets(str, "AB")).toBe("does not match pattern");
+
+  it("strips 2 and 5 factors exactly like gcd reduction", () => {
+    const cases = ["0.5", "0.25", "0.125", "2.50", "-0.075", "10.00", "-0", "0.000", "12.3400", "1000", "0.2", "0.04", "100.001", "6.25", "-1.5"];
+    for (const lexical of cases) {
+      const got = rationalFromDecimalString(lexical);
+      const scale = lexical.includes(".") ? lexical.split(".")[1]?.length ?? 0 : 0;
+      const sign = lexical.startsWith("-") ? -1n : 1n;
+      const expected = rational(sign * BigInt(lexical.replace(/^-/, "").replace(".", "")), 10n ** BigInt(scale));
+      expect(got, lexical).toEqual(expected);
+    }
   });
 });
