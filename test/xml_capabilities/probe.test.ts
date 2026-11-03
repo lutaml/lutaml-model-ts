@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 
-// moxml-ts is not on npm; CI installs without it. When it is absent the probe
+// moxml-ts is a git dependency (lutaml/moxml-ts#9). When it is absent the probe
 // exits 2 with a capability error and these cases are reported as skipped,
 // never as passed.
 const run = spawnSync(process.execPath, ["scripts/probe-moxml.mjs", "--json"], { encoding: "utf8" });
@@ -27,7 +27,7 @@ describe("moxml-ts capability probe", () => {
       for (const f of ["pin", "parser", "namespace", "attribute", "mixed-content", "builder", "serialization", "parser-policy"]) {
         expect(faces.has(f), f).toBe(true);
       }
-      expect(cases.length).toBe(29);
+      expect(cases.length).toBe(31);
     });
 
     it("no drift between the recorded and observed behaviour", () => {
@@ -36,8 +36,8 @@ describe("moxml-ts capability probe", () => {
 
     it("records the missing and unsafe faces precisely", () => {
       const ids = (s: string) => cases.filter((c) => c.status === s).map((c) => c.id);
-      expect(ids("absent")).toEqual(["NS-03", "NS-04", "ATTR-03", "BLD-04", "SER-03", "POL-09"]);
-      expect(ids("unsafe")).toEqual(["ATTR-04", "BLD-03", "POL-06", "POL-08"]);
+      expect(ids("absent")).toEqual(["BLD-04", "SER-03", "POL-09"]);
+      expect(ids("unsafe")).toEqual(["ATTR-04", "POL-06", "POL-08"]);
     });
   });
 });

@@ -5,15 +5,18 @@
 // status: supported | partial | absent | unsafe. A case whose observation
 // differs from the recorded EXPECTATION is a drift failure (exit 1).
 // Exit codes: 0 all observations match; 1 drift/probe error; 2 moxml-ts unavailable.
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 export const PIN = {
   package: "moxml-ts",
   version: "0.1.0",
-  commit: "b0183ed9762df4f877b9b0439a6259562985c137",
-  leptrisWasm: "leptris-v1.6.1",
-  moxmlWasm: "v0.1.1",
+  // lutaml/moxml-ts#9 (draft) head; the repo's package-lock.json must resolve to it.
+  commit: "139e8ae652e4f2c10b498f7f5c285d2b6dbde2dd",
+  // First 16 hex chars of the sha256 of the vendored wasm bundles (no .pin files ship in the install).
+  leptrisWasm: "2b5e6e9b412a9f9b",
+  moxmlWasm: "87bed5fe83f5d7e8",
 };
 const UP = "lutaml/moxml-ts (src/document.ts)";
 const NS = "lutaml/leptris-rs#22 (namespace/attribute/capability follow-through)";
@@ -25,8 +28,8 @@ async function load() {
     return await import("moxml-ts");
   } catch (cause) {
     const e = new Error(
-      "MOXML_TS_UNAVAILABLE: moxml-ts is not installed (not on npm; build lutaml/moxml-ts at " +
-        PIN.commit + " after scripts/fetch-wasm.sh and install it with `npm install --no-save <checkout>`; see docs/xml-capabilities.md): " +
+      "MOXML_TS_UNAVAILABLE: moxml-ts is not installed (not on npm; run `npm ci` (moxml-ts is a git dependency at lutaml/moxml-ts#9 " +
+        PIN.commit.slice(0, 7) + "; see docs/xml-capabilities.md): " +
         String(cause.message).split("\n")[0],
     );
     e.code = "MOXML_TS_UNAVAILABLE";
@@ -38,10 +41,14 @@ function installedPins() {
   // exports hides package.json; the entry is <root>/dist/index.js.
   const root = fileURLToPath(new URL("../", import.meta.resolve("moxml-ts")));
   const read = (p) => readFileSync(root + p, "utf8").trim();
+  const digest = (p) => createHash("sha256").update(readFileSync(root + p)).digest("hex").slice(0, 16);
+  const lock = JSON.parse(readFileSync(new URL("../package-lock.json", import.meta.url), "utf8"));
+  const resolved = lock.packages?.["node_modules/moxml-ts"]?.resolved ?? "";
   return {
     version: JSON.parse(read("package.json")).version,
-    leptrisWasm: read("vendor/leptris-wasm/.pin"),
-    moxmlWasm: read("vendor/moxml-wasm/.pin"),
+    commit: resolved.split("#")[1] ?? "",
+    leptrisWasm: digest("vendor/leptris-wasm/leptris_bg.wasm"),
+    moxmlWasm: digest("vendor/moxml-wasm/moxml_bg.wasm"),
   };
 }
 
@@ -61,7 +68,7 @@ export async function runProbe() {
 
   const pins = installedPins();
   add("PIN-01", "pin", "supported",
-    { version: PIN.version, leptrisWasm: PIN.leptrisWasm, moxmlWasm: PIN.moxmlWasm },
+    { version: PIN.version, commit: PIN.commit, leptrisWasm: PIN.leptrisWasm, moxmlWasm: PIN.moxmlWasm },
     pins, "installed moxml-ts matches the pin recorded in this script", UP);
 
   // ---- engine init: first parse needs no explicit init under Node.
@@ -83,16 +90,33 @@ export async function runProbe() {
       childLocal: ns.xpath("local-name(/*/*[1])"),
     },
     "namespace URI, prefixed name and local name are readable ONLY through document-level XPath functions; xmlns= resets work");
-  add("NS-02", "namespace", "partial", { nodeName: "b" }, { nodeName: nodeNames[0] },
-    "Node.name() returns the LOCAL name; the prefix and namespace URI are not on Node (no namespaceUri()/prefix()). Codecs must address nodes by XPath index expressions.", NS);
-  add("NS-03", "namespace", "absent",
-    { nodeMethods: [] },
-    { nodeMethods: ["namespaceUri", "prefix", "localName", "nsDeclarations"].filter((n) => typeof m.Node.prototype[n] === "function") },
-    "no namespace accessor or in-scope-namespace enumeration on Node or Document", NS);
+  add("NS-02", "namespace", "supported", { nodeName: "b" }, { nodeName: nodeNames[0] },
+    "Node.name() still returns the LOCAL name; the qualified name, prefix and URI are on the separate accessors (NS-03, NS-05)");
+  const NODE_NS = ["namespaceUri", "prefix", "localName", "qualifiedName", "inScopeNamespaces", "declaredNamespaces"];
+  add("NS-03", "namespace", "supported",
+    { nodeMethods: NODE_NS },
+    { nodeMethods: NODE_NS.filter((n) => typeof m.Node.prototype[n] === "function") },
+    "moxml-ts#9 puts namespace accessors and in-scope/declared namespace enumeration on Node");
+  const rootNode = ns.root();
+  const childNode = rootNode.children()[0];
+  add("NS-05", "namespace", "supported",
+    {
+      root: { uri: "urn:d", prefix: "", local: "r", qualified: "r" },
+      child: { uri: "urn:p", prefix: "p", local: "b", qualified: "p:b" },
+      inScope: [["xml", "http://www.w3.org/XML/1998/namespace"], ["p", "urn:p"], ["", "urn:d"]],
+      declared: [["p", "urn:p"], ["", "urn:d"]],
+    },
+    {
+      root: { uri: rootNode.namespaceUri(), prefix: rootNode.prefix(), local: rootNode.localName(), qualified: rootNode.qualifiedName() },
+      child: { uri: childNode.namespaceUri(), prefix: childNode.prefix(), local: childNode.localName(), qualified: childNode.qualifiedName() },
+      inScope: childNode.inScopeNamespaces().map((b) => [b.prefix, b.uri]),
+      declared: rootNode.declaredNamespaces().map((b) => [b.prefix, b.uri]),
+    },
+    "accessor values; the default namespace has prefix '' and the xml prefix is always in scope");
   const nsAxis = ns.xpathTyped("/*/namespace::*").nodes().map((n) => [n.name(), n.text()]);
-  add("NS-04", "namespace", "absent", { namespaceAxis: true },
+  add("NS-04", "namespace", "partial", { namespaceAxis: true },
     { namespaceAxis: nsAxis.length > 0 && nsAxis.every(([a, b]) => a === "" && b === "") },
-    "namespace:: axis returns nodes but they expose no prefix/URI (name()/text() are empty), so in-scope declarations cannot be enumerated", NS);
+    "namespace:: axis returns nodes but they expose no prefix/URI (name()/text() are empty), so the axis is not the way to enumerate declarations; use Node.inScopeNamespaces() (NS-05)", NS);
 
   // ---- attribute reads
   add("ATTR-01", "attribute", "supported", { plain: "v", prefixed: "1", missing: "" },
@@ -109,13 +133,24 @@ export async function runProbe() {
       emptyValuePresent: (await m.parse('<a e=""/>')).xpathCount("/a/@e"),
     }, "presence vs empty value is decidable with xpathCount");
   const an = ns.xpathTyped("/*/@k").nodes().map((n) => [n.kind(), n.name(), n.text()]);
-  add("ATTR-03", "attribute", "absent",
-    { attributeNode: [7, "", ""], nodeMethods: [] },
+  add("ATTR-03", "attribute", "partial",
+    {
+      attributeNode: [7, "", ""],
+      nodeMethods: ["attributes", "getAttribute"],
+      first: { name: "k", prefix: "", localName: "k", namespaceUri: "", value: "v" },
+      second: { name: "p:z", prefix: "p", localName: "z", namespaceUri: "urn:p", value: "1" },
+      k: "v",
+      missing: undefined,
+    },
     {
       attributeNode: an[0],
       nodeMethods: ["attribute", "attributes", "getAttribute", "hasAttribute", "removeAttribute"].filter((n) => typeof m.Node.prototype[n] === "function"),
+      first: rootNode.attributes()[0],
+      second: rootNode.attributes()[1],
+      k: rootNode.getAttribute("k"),
+      missing: rootNode.getAttribute("nope"),
     },
-    "no Node attribute API (only setAttribute); attribute nodes from XPath have empty name()/text() so attribute NAMES (incl. prefixes) and document order of attributes cannot be listed",
+    "Node.attributes() lists name/prefix/localName/namespaceUri/value in document order and getAttribute() reads by name (undefined when absent); XPath attribute nodes still have empty name()/text(); there is still no removeAttribute (BLD-04)",
     NS);
   const dup = await capture(async () => (await m.parse('<a x="1" x="2"/>')).toXml());
   add("ATTR-04", "attribute", "unsafe", { ok: '<a x="1"/>' }, dup,
@@ -161,11 +196,20 @@ export async function runProbe() {
     { uri: reparsed.xpath("namespace-uri(/*)"), attr: reparsed.xpath("string(/*/*/@*[local-name()='z'])") },
     "built output round-trips through parse with the namespace intact");
   const bad = await capture(() => b.createElement("1 bad name") && "created");
-  add("BLD-03", "builder", "unsafe", { ok: "created" }, bad, "createElement does not validate the name (invalid XML name accepted; no error); callers must validate (moxml-ts exports valid_lexical)");
+  add("BLD-03", "builder", "supported", { threw: 'invalid element name: "1 bad name"' }, bad, "createElement now validates the name and throws on an invalid XML name");
   add("BLD-04", "builder", "absent",
-    { missing: ["createCData", "createComment", "createProcessingInstruction", "removeAttribute", "setAttributeNS", "createElementNS"] },
-    { missing: ["createCData", "createComment", "createProcessingInstruction", "removeAttribute", "setAttributeNS", "createElementNS"].filter((n) => typeof m.Document.prototype[n] !== "function" && typeof m.Node.prototype[n] !== "function") },
-    "builder cannot emit CDATA, comments or PIs, and has no namespace-aware element/attribute constructors; CDATA output is therefore impossible from the builder (only a parsed CDATA survives toXml)", NS);
+    { missing: ["createCData", "createComment", "createProcessingInstruction", "removeAttribute"] },
+    { missing: ["createCData", "createComment", "createProcessingInstruction", "removeAttribute"].filter((n) => typeof m.Document.prototype[n] !== "function" && typeof m.Node.prototype[n] !== "function") },
+    "builder still cannot emit CDATA, comments or PIs and cannot remove an attribute; CDATA output is therefore impossible from the builder (only a parsed CDATA survives toXml). createElementNS/setAttributeNS/declareNamespace now exist (BLD-05)", NS);
+  const nb = await m.createDocument();
+  const nr = nb.createElementNS("urn:p", "p:r");
+  nr.setAttributeNS("urn:q", "q:z", "1");
+  nr.addChild(nb.createElementNS("urn:p", "p:c"));
+  nr.addChild(nb.createElementNS("", "u"));
+  nb.setRoot(nr);
+  add("BLD-05", "builder", "supported",
+    { xml: '<p:r xmlns:p="urn:p" xmlns:q="urn:q" q:z="1"><p:c xmlns:p="urn:p"/><u/></p:r>' }, { xml: nb.toXml() },
+    "createElementNS/setAttributeNS declare the prefix; a child created with createElementNS repeats a declaration already in scope (callers that want compact output use createElement with the bound prefix, as the 07b writer does)");
   const cd = await m.parse("<a><![CDATA[x<y]]></a>");
   add("SER-01", "serialization", "supported", { xml: "<a><![CDATA[x<y]]></a>" }, { xml: cd.toXml() },
     "toXml preserves parsed CDATA sections");
