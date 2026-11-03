@@ -1,0 +1,225 @@
+import * as YAML from "yaml";
+import type { SchemaFormat } from "../contracts.js";
+import { fail } from "./errors.js";
+
+/** A non-integer number from the source (Ruby Float); legal only in v1 documents. */
+export class RawFloat {
+  readonly value: number;
+  constructor(value: number) {
+    this.value = value;
+    Object.freeze(this);
+  }
+}
+
+/**
+ * Parsed but unvalidated tree. Objects are insertion-ordered maps so that the
+ * v1 canonical form (which keeps source order) survives JS integer-key
+ * reordering. Integers are `number` when safe, `bigint` otherwise.
+ */
+export type Raw =
+  | null
+  | boolean
+  | number
+  | bigint
+  | string
+  | RawFloat
+  | readonly Raw[]
+  | RawMap;
+export type RawMap = ReadonlyMap<unknown, Raw>;
+
+function intValue(big: bigint): number | bigint {
+  const n = Number(big);
+  return Number.isSafeInteger(n) ? n : big;
+}
+
+function decode(bytes: Uint8Array): string {
+  if (bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
+    fail("invalid_document", "byte order mark is not accepted", "");
+  }
+  try {
+    return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
+  } catch {
+    return fail("invalid_document", "input is not valid UTF-8", "");
+  }
+}
+
+const NUMBER = /-?(?:0|[1-9]\d*)(\.\d+)?([eE][+-]?\d+)?/y;
+const ESCAPES: Readonly<Record<string, string>> = {
+  '"': '"', "\\": "\\", "/": "/", b: "\b", f: "\f", n: "\n", r: "\r", t: "\t",
+};
+const MAX_PARSE_DEPTH = 512;
+
+/**
+ * Strict RFC 8259 parser into insertion-ordered maps. JSON.parse cannot be
+ * used: it reorders integer-like keys and hides 1 versus 1.0.
+ */
+class JsonParser {
+  private pos = 0;
+  constructor(private readonly src: string) {}
+
+  parse(): Raw {
+    const value = this.value(0);
+    this.space();
+    if (this.pos !== this.src.length) this.error("unexpected trailing characters");
+    return value;
+  }
+
+  private error(message: string): never {
+    return fail("invalid_document", `json: ${message} at offset ${this.pos}`, "");
+  }
+
+  private space(): void {
+    while (this.pos < this.src.length && " \t\n\r".includes(this.src[this.pos] as string)) this.pos++;
+  }
+
+  private value(depth: number): Raw {
+    if (depth > MAX_PARSE_DEPTH) this.error("nesting too deep");
+    this.space();
+    const ch = this.src[this.pos];
+    if (ch === "{") return this.object(depth);
+    if (ch === "[") return this.array(depth);
+    if (ch === '"') return this.string();
+    for (const [word, value] of [["true", true], ["false", false], ["null", null]] as const) {
+      if (this.src.startsWith(word, this.pos)) {
+        this.pos += word.length;
+        return value;
+      }
+    }
+    return this.number();
+  }
+
+  private number(): Raw {
+    NUMBER.lastIndex = this.pos;
+    const m = NUMBER.exec(this.src);
+    if (m === null) this.error("unexpected character");
+    this.pos += m[0].length;
+    if (m[1] === undefined && m[2] === undefined) return intValue(BigInt(m[0]));
+    return new RawFloat(Number(m[0]));
+  }
+
+  private string(): string {
+    this.pos++;
+    let out = "";
+    for (;;) {
+      const ch = this.src[this.pos++];
+      if (ch === undefined) this.error("unterminated string");
+      if (ch === '"') return out;
+      if (ch < " ") this.error("control character in string");
+      if (ch !== "\\") {
+        out += ch;
+        continue;
+      }
+      const esc = this.src[this.pos++];
+      if (esc === "u") {
+        const hex = this.src.slice(this.pos, this.pos + 4);
+        if (!/^[0-9a-fA-F]{4}$/.test(hex)) this.error("bad unicode escape");
+        out += String.fromCharCode(parseInt(hex, 16));
+        this.pos += 4;
+      } else if (esc !== undefined && Object.hasOwn(ESCAPES, esc)) {
+        out += ESCAPES[esc];
+      } else {
+        this.error("bad escape");
+      }
+    }
+  }
+
+  private array(depth: number): Raw {
+    this.pos++;
+    const out: Raw[] = [];
+    this.space();
+    if (this.src[this.pos] === "]") {
+      this.pos++;
+      return out;
+    }
+    for (;;) {
+      out.push(this.value(depth + 1));
+      this.space();
+      const ch = this.src[this.pos++];
+      if (ch === "]") return out;
+      if (ch !== ",") this.error("expected , or ]");
+    }
+  }
+
+  private object(depth: number): Raw {
+    this.pos++;
+    const out = new Map<unknown, Raw>();
+    this.space();
+    if (this.src[this.pos] === "}") {
+      this.pos++;
+      return out;
+    }
+    for (;;) {
+      this.space();
+      if (this.src[this.pos] !== '"') this.error("expected a string key");
+      const key = this.string();
+      this.space();
+      if (this.src[this.pos++] !== ":") this.error("expected :");
+      out.set(key, this.value(depth + 1)); // duplicate key: last wins, first position (as Ruby)
+      this.space();
+      const ch = this.src[this.pos++];
+      if (ch === "}") return out;
+      if (ch !== ",") this.error("expected , or }");
+    }
+  }
+}
+
+function jsonToRaw(text: string): Raw {
+  return new JsonParser(text).parse();
+}
+
+function yamlToRaw(text: string): Raw {
+  const doc = YAML.parseDocument(text, {
+    schema: "core",
+    version: "1.2",
+    merge: false,
+    uniqueKeys: true,
+    intAsBigInt: true,
+    prettyErrors: false,
+  });
+  const problem = doc.errors[0] ?? doc.warnings[0];
+  if (problem) fail("invalid_document", `YAML: ${problem.code}`, "");
+  if (doc.contents === null) fail("invalid_document", "empty YAML document", "");
+  YAML.visit(doc, {
+    Alias: () => fail("invalid_document", "YAML aliases are not accepted", ""),
+    Node: (_key, node) => {
+      if (node.anchor !== undefined) fail("invalid_document", "YAML anchors are not accepted", "");
+      if (node.tag !== undefined) fail("invalid_document", `YAML tag ${node.tag} is not accepted`, "");
+    },
+  });
+  return nodeToRaw(doc.contents);
+}
+
+function nodeToRaw(node: unknown): Raw {
+  if (YAML.isMap(node)) {
+    const out = new Map<unknown, Raw>();
+    for (const pair of node.items) {
+      const key = YAML.isScalar(pair.key) ? scalarToRaw(pair.key.value) : fail("invalid_document", "non-scalar key", "");
+      out.set(key, nodeToRaw(pair.value));
+    }
+    return out;
+  }
+  if (YAML.isSeq(node)) return node.items.map(nodeToRaw);
+  if (YAML.isScalar(node)) return scalarToRaw(node.value);
+  return fail("invalid_document", "unsupported YAML node", "");
+}
+
+function scalarToRaw(value: unknown): Raw {
+  if (value === null || typeof value === "boolean" || typeof value === "string") return value;
+  if (typeof value === "bigint") return intValue(value);
+  if (typeof value === "number") return new RawFloat(value);
+  return fail("invalid_document", `unsupported YAML value ${typeof value}`, "");
+}
+
+/** Parses bytes into the unvalidated tree; never evaluates anything. */
+export function parseRaw(bytes: Uint8Array, format: SchemaFormat): Raw {
+  const text = decode(bytes);
+  try {
+    if (format === "json") return jsonToRaw(text);
+    if (format === "yaml") return yamlToRaw(text);
+  } catch (error) {
+    if (error instanceof Error && error.name === "LmlError") throw error;
+    const detail = error instanceof RangeError ? "nesting too deep" : error instanceof Error ? error.message : "parse error";
+    return fail("invalid_document", `${format}: ${detail}`, "");
+  }
+  return fail("unsupported_format", `schema format ${String(format)}`, "");
+}
