@@ -1,0 +1,66 @@
+name: conformance
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  artifacts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Regenerate TS artifacts twice and pin their digest
+        run: |
+          set -euo pipefail
+          a="$RUNNER_TEMP/conformance-a"
+          b="$RUNNER_TEMP/conformance-b"
+          rm -rf "$a" "$b"
+          gen() {
+            node dist/cli.js generate test/cli/bundle.json \
+              --bindings test/cli/bindings.json \
+              --format json --format yaml --out "$1"
+          }
+          gen "$a" > "$RUNNER_TEMP/digest-a.txt"
+          gen "$b" > "$RUNNER_TEMP/digest-b.txt"
+          diff -r "$a" "$b"
+          cmp "$RUNNER_TEMP/digest-a.txt" "$RUNNER_TEMP/digest-b.txt"
+          cmp "$RUNNER_TEMP/digest-a.txt" test/conformance/expected-digest.txt
+          cmp "$a/manifest.sha256" "$RUNNER_TEMP/digest-a.txt"
+      - name: Check out lutaml/lutaml-model verifier (PR #1116 branch)
+        uses: actions/checkout@v4
+        with:
+          repository: lutaml/lutaml-model
+          # Pinned to the branch head that owns scripts/lml/verify_artifacts.rb.
+          ref: 4e75c92b7d9ab3e3aa5f4f90af4a9ce860c76f72
+          path: lutaml-model
+      - name: Set up Ruby (stdlib only; no bundle install)
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+          bundler: none
+      - name: Verify generated artifacts with the Ruby verifier
+        working-directory: lutaml-model
+        run: |
+          set -euo pipefail
+          a="$RUNNER_TEMP/conformance-a"
+          digest="$(cat "$RUNNER_TEMP/digest-a.txt")"
+          ruby scripts/lml/verify_artifacts.rb --manifest "$a/manifest.json" --expected-sha256 "$digest"
+          # Negative control: a one-byte change to a generated file must be refused.
+          tampered="$RUNNER_TEMP/conformance-tampered"
+          rm -rf "$tampered"
+          cp -R "$a" "$tampered"
+          printf '\n// tamper\n' >> "$tampered/models.ts"
+          if ruby scripts/lml/verify_artifacts.rb --manifest "$tampered/manifest.json" --expected-sha256 "$digest"; then
+            echo "verifier accepted a tampered artifact" >&2
+            exit 1
+          fi
