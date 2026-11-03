@@ -115,6 +115,23 @@ export function eBool(x: boolean): boolean {
 
 const INTEGER_LEXICAL = /^[+-]?[0-9]+$/;
 
+const FLOAT_WIRE = /^-?[0-9]+\.[0-9]+(?:e-?[0-9]+)?$/;
+
+/** Ruby-compatible shortest round-trip spelling: lowercase e, no +, no leading zeros, fraction digit always. */
+function floatText(value: number): string {
+  if (value === 0) return Object.is(value, -0) ? "-0.0" : "0.0";
+  const [mantissa = "", exp = "0"] = Math.abs(value).toExponential().split("e");
+  const digits = mantissa.replace(".", "");
+  const decpt = Number(exp) + 1;
+  const sign = value < 0 ? "-" : "";
+  if (decpt > -4 && decpt <= 15) {
+    if (decpt <= 0) return sign + "0." + "0".repeat(-decpt) + digits;
+    if (decpt >= digits.length) return sign + digits + "0".repeat(decpt - digits.length) + ".0";
+    return sign + digits.slice(0, decpt) + "." + digits.slice(decpt);
+  }
+  return sign + digits[0] + "." + (digits.length > 1 ? digits.slice(1) : "0") + "e" + (decpt - 1);
+}
+
 /** Exact integers travel as decimal strings; JSON numbers are refused. */
 export function dInt(v: unknown): bigint {
   if (typeof v === "number") return wireFail("integers are exact decimal strings; a JSON number is refused");
@@ -124,6 +141,20 @@ export function dInt(v: unknown): bigint {
 
 export function eInt(x: bigint): string {
   return x.toString(10);
+}
+
+/** Floats travel as canonical strings (binary64, one spelling); JSON numbers are refused. */
+export function dFloat(v: unknown): number {
+  if (typeof v === "number") return wireFail("floats are canonical strings; a JSON number is refused");
+  if (typeof v !== "string" || !FLOAT_WIRE.test(v)) return wireFail("expected a canonical float string");
+  const n = Number(v);
+  if (!Number.isFinite(n) || floatText(n) !== v) return wireFail("float string is not in canonical form");
+  return n;
+}
+
+export function eFloat(x: number): string {
+  if (typeof x !== "number" || !Number.isFinite(x)) return wireFail("a non-finite float has no wire form", "not_serializable");
+  return floatText(x);
 }
 
 /** A bound exact/custom type: a lexical string through its trusted parser. */

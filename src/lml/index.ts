@@ -12,6 +12,7 @@ import { parseRaw, RawFloat, type Raw } from "./raw.js";
 import { validateRaw, type Tree, type TreeObject } from "./validator.js";
 
 export { bundleCanonicalJson, bundleChecksum, modelChecksum, rubyFloat, RawFloat };
+export { canonicalFloat, floatWire } from "./float.js";
 
 /**
  * A version-1 document, accepted unchanged. Unknown keys are tolerated and

@@ -115,7 +115,7 @@ class Context {
 }
 
 function builtinWire(ctx: Context, name: string, refuse: Refusal, attribute: string, bindingKey: string): Wire {
-  if (name === "float" || name === "double") refuse.raise("unsupported_type", name, attribute);
+  if (name === "double") refuse.raise("unsupported_type", name, attribute);
   if (STRING_FAMILY.has(name)) return { dec: "w.dStr", enc: "w.eStr", shape: "text" };
   if (EXACT_BUILTINS.has(name)) {
     const binding = ctx.bindings.types[`builtin:${name}`];
@@ -127,6 +127,7 @@ function builtinWire(ctx: Context, name: string, refuse: Refusal, attribute: str
   switch (name) {
     case "boolean": return { dec: "w.dBool", enc: "w.eBool", shape: "scalar" };
     case "integer": return { dec: "w.dInt", enc: "w.eInt", shape: "scalar" };
+    case "float": return { dec: "w.dFloat", enc: "w.eFloat", shape: "scalar" };
     case "qname": return { dec: "w.dQName", enc: "w.eQName", shape: "scalar" };
     case "base64_binary": return { dec: "w.dBase64", enc: "w.eBase64", shape: "scalar" };
     case "hex_binary": return { dec: "w.dHex", enc: "w.eHex", shape: "scalar" };
@@ -185,7 +186,7 @@ function elementWire(ctx: Context, attr: AttributeSpec, disc: Discriminator | un
     if (spec === undefined) return refuse.raise("dangling_reference", `value type ${type.id}`, attr.name);
     const binding = Object.hasOwn(ctx.bindings.types, type.id) ? ctx.bindings.types[type.id] : undefined;
     if (binding !== undefined) {
-      if (spec.base === "float" || spec.base === "double") refuse.raise("unsupported_type", spec.base, attr.name);
+      if (spec.base === "double") refuse.raise("unsupported_type", spec.base, attr.name);
       return boundWire(ctx, binding, type.id);
     }
     return builtinWire(ctx, spec.base, refuse, attr.name, type.id);

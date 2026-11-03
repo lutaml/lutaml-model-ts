@@ -1,5 +1,6 @@
 import type { ErrorCode } from "../contracts.js";
 import { fail, pointer } from "./errors.js";
+import { canonicalFloat } from "./float.js";
 import { RawFloat, type Raw } from "./raw.js";
 
 /** Frozen neutral tree: JSON scalars, arrays, plain objects (v1 may hold bigint/RawFloat). */
@@ -12,10 +13,10 @@ export type Kind = "document" | "bundle" | "manifest";
 
 export const BUILTIN_TYPES: readonly string[] = [
   "string", "token", "uri", "email", "hostname", "ip", "boolean", "integer",
-  "decimal", "rational", "date", "time", "date_time", "time_without_date",
+  "decimal", "float", "rational", "date", "time", "date_time", "time_without_date",
   "duration", "qname", "base64_binary", "hex_binary", "symbol", "hash",
 ];
-const UNSUPPORTED_BUILTINS = ["float", "double"];
+const UNSUPPORTED_BUILTINS = ["double"];
 export const FORMATS: readonly string[] = ["xml", "json", "yaml", "toml"];
 const NAMESPACE_MODES = ["inherit", "unqualified", "uri"];
 const MANIFEST_TARGETS = ["ruby", "ts", "rust", "wasm"];
@@ -215,6 +216,7 @@ function attributesV2(attributes: Tree | undefined, at: string, id: string): voi
     for (const flag of FLAG_KEYS) if (has(attr, flag)) expectBool(attr[flag], loc + pointer(flag));
     if (has(attr, "collection")) collection(attr["collection"], loc + pointer("collection"));
     if (has(attr, "default")) defaultSpec(attr["default"], loc + pointer("default"), id, name);
+    floatDefault(attr, loc, id, name);
     if (has(attr, "values")) expectArray(attr["values"], loc + pointer("values"));
     if (has(attr, "discriminator")) discriminatorShape(attr["discriminator"], loc + pointer("discriminator"), id);
   });
@@ -271,6 +273,17 @@ function defaultSpec(node: Tree | undefined, at: string, id: string, attribute: 
   } else if (has(node, "value")) {
     fail("invalid_document", "absent default carries no value", at + pointer("value"), { model_id: id, attribute });
   }
+}
+
+/** A float default is a canonical float string (never a JSON number). */
+function floatDefault(attr: Obj, loc: string, id: string, name: string): void {
+  const type = attr["type"];
+  const def = attr["default"];
+  if (!isObj(type) || type["kind"] !== "builtin" || type["name"] !== "float") return;
+  if (!isObj(def) || def["present"] !== true) return;
+  if (canonicalFloat(def["value"])) return;
+  fail("invalid_document", "float default must be a canonical float string", loc + pointer("default", "value"),
+    { model_id: id, attribute: name });
 }
 
 function discriminatorShape(node: Tree | undefined, at: string, id: string): void {

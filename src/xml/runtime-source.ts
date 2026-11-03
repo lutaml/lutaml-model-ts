@@ -316,6 +316,23 @@ function build<T>(cls: new (init: never) => T, init: Rec, spec: ModelSpec, loc: 
 const UNPAIRED_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
 const INTEGER_LEXICAL = /^[+-]?[0-9]+$/;
 
+const FLOAT_WIRE = /^-?[0-9]+\.[0-9]+(?:e-?[0-9]+)?$/;
+
+/** Ruby-compatible shortest round-trip spelling: lowercase e, no +, no leading zeros, fraction digit always. */
+function floatText(value: number): string {
+  if (value === 0) return Object.is(value, -0) ? "-0.0" : "0.0";
+  const [mantissa = "", exp = "0"] = Math.abs(value).toExponential().split("e");
+  const digits = mantissa.replace(".", "");
+  const decpt = Number(exp) + 1;
+  const sign = value < 0 ? "-" : "";
+  if (decpt > -4 && decpt <= 15) {
+    if (decpt <= 0) return sign + "0." + "0".repeat(-decpt) + digits;
+    if (decpt >= digits.length) return sign + digits + "0".repeat(decpt - digits.length) + ".0";
+    return sign + digits.slice(0, decpt) + "." + digits.slice(decpt);
+  }
+  return sign + digits[0] + "." + (digits.length > 1 ? digits.slice(1) : "0") + "e" + (decpt - 1);
+}
+
 export function dStr(s: string): string {
   return UNPAIRED_SURROGATE.test(s) ? xmlFail("string is not valid Unicode") : s;
 }
@@ -330,6 +347,13 @@ export function dBool(s: string): boolean {
 export function dInt(s: string): bigint {
   const t = s.trim();
   return INTEGER_LEXICAL.test(t) ? BigInt(t) : xmlFail("expected an exact integer");
+}
+
+export function dFloat(s: string): number {
+  const t = s.trim();
+  if (!FLOAT_WIRE.test(t)) return xmlFail("expected a canonical float");
+  const n = Number(t);
+  return Number.isFinite(n) && floatText(n) === t ? n : xmlFail("float is not in canonical form");
 }
 
 export function dBound<T>(s: string, parse: (lexical: string) => T): T {
@@ -685,6 +709,11 @@ export function eBool(x: boolean): string {
 
 export function eInt(x: bigint): string {
   return x.toString(10);
+}
+
+export function eFloat(x: number): string {
+  if (typeof x !== "number" || !Number.isFinite(x)) return xmlFail("a non-finite float has no text form", "", "not_serializable");
+  return floatText(x);
 }
 
 export function eBound<T>(x: T, format: (value: T) => string): string {

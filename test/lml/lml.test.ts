@@ -167,7 +167,12 @@ describe("model errors (mirrors the Ruby validator spec)", () => {
     "imperative order": [(d) => { d.imperative_element_order = true; }, "imperative_element_order", "/imperative_element_order"],
     "unknown builtin type": [(d) => { d.attributes[1].type = { kind: "builtin", name: "nope" }; }, "unknown_type", "/attributes/1/type/name"],
     "unknown type kind": [(d) => { d.attributes[1].type = { kind: "weird" }; }, "unknown_type", "/attributes/1/type/kind"],
-    "float type": [(d) => { d.attributes[1].type = { kind: "builtin", name: "float" }; }, "unsupported_type", "/attributes/1/type/name"],
+    "double type": [(d) => { d.attributes[1].type = { kind: "builtin", name: "double" }; }, "unsupported_type", "/attributes/1/type/name"],
+    "float default as a JSON number": [(d) => { d.attributes[1].type = { kind: "builtin", name: "float" }; d.attributes[1].default = { present: true, value: 1 }; }, "invalid_document", "/attributes/1/default/value"],
+    "float default with a leading-zero exponent": [(d) => { d.attributes[1].type = { kind: "builtin", name: "float" }; d.attributes[1].default = { present: true, value: "1.0e-05" }; }, "invalid_document", "/attributes/1/default/value"],
+    "float default with a plus sign": [(d) => { d.attributes[1].type = { kind: "builtin", name: "float" }; d.attributes[1].default = { present: true, value: "+0.71" }; }, "invalid_document", "/attributes/1/default/value"],
+    "float default without a fraction digit": [(d) => { d.attributes[1].type = { kind: "builtin", name: "float" }; d.attributes[1].default = { present: true, value: "1e-5" }; }, "invalid_document", "/attributes/1/default/value"],
+    "float default NaN": [(d) => { d.attributes[1].type = { kind: "builtin", name: "float" }; d.attributes[1].default = { present: true, value: "NaN" }; }, "invalid_document", "/attributes/1/default/value"],
     "duplicate attribute": [(d) => { d.attributes[1].name = "children"; }, "duplicate_id", "/attributes/1/name"],
     "reserved member": [(d) => { d.attributes[1].name = "__lml_content"; }, "reserved_member", "/attributes/1/name"],
     "unknown format": [(d) => { d.mappings.csv = {}; }, "unsupported_format", "/mappings/csv"],
@@ -206,7 +211,7 @@ describe("model errors (mirrors the Ruby validator spec)", () => {
 
   it("uses only the agreed error codes", () => {
     expect(ERROR_CODES).toHaveLength(21);
-    expect(BUILTIN_TYPES).toHaveLength(20);
+    expect(BUILTIN_TYPES).toHaveLength(21);
     expect(FORMATS).toEqual(["xml", "json", "yaml", "toml"]);
   });
 });

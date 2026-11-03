@@ -278,7 +278,7 @@ describe("generateModels: rejections", () => {
     expect(codeOf(() => generateModels(rich, NO_BINDINGS))).toBe("missing_type_binding");
   });
 
-  it("rejects unknown facets, float/double and unknown builtins", () => {
+  it("rejects unknown facets, double and unknown builtins", () => {
     const facet = mutate(rich, (d) => {
       d.value_types["sku"] = { base: "string", facets: { total_digits: 3 } };
     });
@@ -288,7 +288,7 @@ describe("generateModels: rejections", () => {
         const attr = d.models["Shop::Circle@default"]?.attributes[0] as { type: unknown };
         attr.type = { kind: "builtin", name };
       });
-    expect(codeOf(() => generateModels(withType("float"), STUB_BINDINGS))).toBe("unsupported_type");
+    expect(codeOf(() => generateModels(withType("double"), STUB_BINDINGS))).toBe("unsupported_type");
     expect(codeOf(() => generateModels(withType("complex"), STUB_BINDINGS))).toBe("unknown_type");
   });
 

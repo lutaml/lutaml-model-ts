@@ -64,6 +64,7 @@ export type Check = (value: unknown) => string | null;
 export const str: Check = (v) => (typeof v === "string" ? null : "expected a string");
 export const bool: Check = (v) => (typeof v === "boolean" ? null : "expected a boolean");
 export const int: Check = (v) => (typeof v === "bigint" ? null : "expected a bigint");
+export const float: Check = (v) => (typeof v === "number" && Number.isFinite(v) ? null : "expected a finite number");
 export const bytes: Check = (v) => (v instanceof Uint8Array ? null : "expected a Uint8Array");
 
 export const token: Check = (v) => {

@@ -111,7 +111,7 @@ function namespaceInfo(spec: NamespaceSpec | undefined): NsInfo {
 }
 
 function scalarFor(ctx: Context, name: string, refuse: Refusal, attribute: string): Scalar {
-  if (name === "float" || name === "double") refuse.raise("unsupported_type", name, attribute);
+  if (name === "double") refuse.raise("unsupported_type", name, attribute);
   if (STRING_FAMILY.has(name)) return { dec: "x.dStr", enc: "x.eStr", textual: true };
   if (EXACT_BUILTINS.has(name)) {
     const binding = ctx.bindings.types[`builtin:${name}`];
@@ -123,6 +123,7 @@ function scalarFor(ctx: Context, name: string, refuse: Refusal, attribute: strin
   switch (name) {
     case "boolean": return { dec: "x.orNil(x.dBool)", enc: "x.eBool", textual: false };
     case "integer": return { dec: "x.orNil(x.dInt)", enc: "x.eInt", textual: false };
+    case "float": return { dec: "x.orNil(x.dFloat)", enc: "x.eFloat", textual: false };
     case "qname": return { dec: "x.orNil(x.dQName)", enc: "x.eQName", textual: false };
     case "base64_binary": return { dec: "x.orNil(x.dBase64)", enc: "x.eBase64", textual: false };
     case "hex_binary": return { dec: "x.orNil(x.dHex)", enc: "x.eHex", textual: false };
@@ -148,7 +149,7 @@ function scalarOf(ctx: Context, attr: AttributeSpec, refuse: Refusal): Scalar {
     if (spec === undefined) return refuse.raise("dangling_reference", `value type ${type.id}`, attr.name);
     const binding = Object.hasOwn(ctx.bindings.types, type.id) ? ctx.bindings.types[type.id] : undefined;
     if (binding !== undefined) {
-      if (spec.base === "float" || spec.base === "double") refuse.raise("unsupported_type", spec.base, attr.name);
+      if (spec.base === "double") refuse.raise("unsupported_type", spec.base, attr.name);
       return boundScalar(ctx, binding);
     }
     return scalarFor(ctx, spec.base, refuse, attr.name);

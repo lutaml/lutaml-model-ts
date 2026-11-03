@@ -9,6 +9,7 @@ import type {
   TypeBinding,
   ValueTypeId,
 } from "../contracts.js";
+import { canonicalFloat } from "../lml/float.js";
 import { fail, isIdentifier } from "./names.js";
 
 /** Generation-time view of one element type (the scalar or collection item). */
@@ -40,9 +41,9 @@ const LEXICAL_CHECKS: Readonly<Record<string, string>> = {
 const EXACT_BUILTINS = new Set(["decimal", "rational"]);
 const KNOWN_BUILTINS = new Set([
   ...STRING_FAMILY, ...Object.keys(LEXICAL_CHECKS), ...EXACT_BUILTINS,
-  "boolean", "integer", "qname", "base64_binary", "hex_binary", "hash",
+  "boolean", "integer", "float", "qname", "base64_binary", "hex_binary", "hash",
 ]);
-const UNSUPPORTED_BUILTINS = new Set(["float", "double"]);
+const UNSUPPORTED_BUILTINS = new Set(["double"]);
 const STRING_FACETS: Readonly<Record<string, string>> = {
   min_length: "minLength", max_length: "maxLength", length: "length", pattern: "pattern",
 };
@@ -50,6 +51,12 @@ const INTEGER_FACETS: Readonly<Record<string, string>> = {
   min_inclusive: "minInclusive", max_inclusive: "maxInclusive",
   min_exclusive: "minExclusive", max_exclusive: "maxExclusive",
 };
+
+/** A float default is the canonical wire string; it is emitted as the exact binary64 literal. */
+function floatLiteral(value: NeutralValue, reject: Reject): string {
+  if (!canonicalFloat(value)) return reject("float defaults are canonical float strings");
+  return value;
+}
 
 export class PlanContext {
   private readonly imports = new Map<string, BoundImport>();
@@ -133,6 +140,8 @@ export class PlanContext {
         };
       case "integer":
         return { ts: "bigint", check: "rt.int", literal: (v, reject) => integerLiteral(v, reject) };
+      case "float":
+        return { ts: "number", check: "rt.float", literal: floatLiteral };
       case "qname":
         return { ts: "rt.QName", check: "rt.qname", literal: qnameLiteral };
       case "base64_binary":
