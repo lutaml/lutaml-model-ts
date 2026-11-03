@@ -6,6 +6,7 @@ import { createKeyValueEmitter } from "../codecs/index.js";
 import type { KeyValueFormat } from "../codecs/index.js";
 import { generateModelsWith } from "../generator/index.js";
 import { bundleChecksum, loadBundle } from "../lml/index.js";
+import { compareBytes } from "../lml/validator.js";
 
 export const MANIFEST_FILE = "manifest.json";
 export const MANIFEST_DIGEST_FILE = "manifest.sha256";
@@ -32,10 +33,6 @@ export interface ArtifactSet {
   readonly manifestSha256: Checksum;
 }
 
-function byCodePoint(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
-}
-
 /** Digest of exact bytes, `sha256:<hex>`. */
 export function sha256Of(data: string | Uint8Array): Checksum {
   return `sha256:${createHash("sha256").update(data).digest("hex")}`;
@@ -53,7 +50,7 @@ export function canonicalManifestJson(value: Plain): string {
     if (Array.isArray(v)) return v.map(sorted);
     if (v !== null && typeof v === "object") {
       const out: { [key: string]: Plain } = {};
-      for (const key of Object.keys(v).sort(byCodePoint)) out[key] = sorted((v as { [k: string]: Plain })[key] as Plain);
+      for (const key of Object.keys(v).sort(compareBytes)) out[key] = sorted((v as { [k: string]: Plain })[key] as Plain);
       return out;
     }
     if (typeof v === "number" && !Number.isInteger(v)) {
@@ -93,7 +90,7 @@ function dependencyPins(bindings: Bindings, version: string): Manifest["dependen
     if (pins.has(module)) continue;
     pins.set(module, { revision: "binding", sha256: sha256Of(canonicalManifestJson(group)) });
   }
-  return [...pins.keys()].sort(byCodePoint).map((name) => ({ name, ...(pins.get(name) as { revision: string; sha256: Checksum }) }));
+  return [...pins.keys()].sort(compareBytes).map((name) => ({ name, ...(pins.get(name) as { revision: string; sha256: Checksum }) }));
 }
 
 /**
@@ -102,7 +99,7 @@ function dependencyPins(bindings: Bindings, version: string): Manifest["dependen
  */
 export function generateArtifacts(input: ArtifactInput): ArtifactSet {
   const bundle: Bundle = loadBundle(input.bundleBytes, input.bundleFormat);
-  const formats: KeyValueFormat[] = [...new Set<KeyValueFormat>(input.formats ?? ["json"])].sort(byCodePoint);
+  const formats: KeyValueFormat[] = [...new Set<KeyValueFormat>(input.formats ?? ["json"])].sort(compareBytes);
   const contractsModule = input.contractsModule;
   const options = contractsModule === undefined ? {} : { contractsModule };
   const emitters = formats.map((format) => createKeyValueEmitter(format, options));
@@ -117,7 +114,7 @@ export function generateArtifacts(input: ArtifactInput): ArtifactSet {
     target: "ts",
     capabilities: formats,
     corpora: [],
-    files: [...sources.keys()].sort(byCodePoint).map((path) => ({ path, sha256: sha256Of(sources.get(path) as string) })),
+    files: [...sources.keys()].sort(compareBytes).map((path) => ({ path, sha256: sha256Of(sources.get(path) as string) })),
     dependencies: dependencyPins(input.bindings, version),
   };
   const manifestJson = canonicalManifestJson(manifest as unknown as Plain);
@@ -125,7 +122,7 @@ export function generateArtifacts(input: ArtifactInput): ArtifactSet {
   const files = new Map<string, string>(sources);
   files.set(MANIFEST_FILE, `${manifestJson}\n`);
   files.set(MANIFEST_DIGEST_FILE, `${manifestSha256}\n`);
-  return { files: new Map([...files].sort(([a], [b]) => byCodePoint(a, b))), manifest, manifestJson, manifestSha256 };
+  return { files: new Map([...files].sort(([a], [b]) => compareBytes(a, b))), manifest, manifestJson, manifestSha256 };
 }
 
 export interface StaleReport {

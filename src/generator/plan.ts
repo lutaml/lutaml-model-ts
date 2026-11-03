@@ -10,7 +10,9 @@ import type {
   ValueTypeId,
 } from "../contracts.js";
 import { canonicalFloat } from "../lml/float.js";
+import { compareBytes } from "../lml/validator.js";
 import { fail, isIdentifier } from "./names.js";
+import { vetPattern } from "./regex.js";
 
 /** Generation-time view of one element type (the scalar or collection item). */
 export interface ElementPlan {
@@ -56,6 +58,11 @@ const INTEGER_FACETS: Readonly<Record<string, string>> = {
 function floatLiteral(value: NeutralValue, reject: Reject): string {
   if (!canonicalFloat(value)) return reject("float defaults are canonical float strings");
   return value;
+}
+
+/** Own-property lookup: names like "constructor" or "__proto__" never reach Object.prototype. */
+function own<T>(table: Readonly<Record<string, T>>, key: string): T | undefined {
+  return Object.hasOwn(table, key) ? table[key] : undefined;
 }
 
 export class PlanContext {
@@ -115,7 +122,7 @@ export class PlanContext {
     this.assertKnownBuiltin(name, modelId, attribute);
     if (EXACT_BUILTINS.has(name)) {
       const key = `builtin:${name}`;
-      const binding = this.bindings.types[key];
+      const binding = own(this.bindings.types, key);
       if (binding === undefined) {
         return fail({
           reason: "missing_type_binding",
@@ -129,7 +136,7 @@ export class PlanContext {
     if (STRING_FAMILY.has(name)) {
       return { ts: "string", check: name === "token" ? "rt.token" : "rt.str", literal: stringLiteral };
     }
-    const lexical = LEXICAL_CHECKS[name];
+    const lexical = own(LEXICAL_CHECKS, name);
     if (lexical !== undefined) return { ts: "string", check: lexical, literal: stringLiteral };
     switch (name) {
       case "boolean":
@@ -157,18 +164,18 @@ export class PlanContext {
   valuePlan(id: ValueTypeId, modelId: string, attribute: string): ElementPlan {
     const cached = this.valueConsts.get(id);
     if (cached !== undefined) return cached;
-    const spec = this.bundle.value_types[id];
+    const spec = own(this.bundle.value_types, id);
     if (spec === undefined) {
       return fail({ reason: "dangling_reference", model_id: modelId, attribute, detail: `value type ${id}` });
     }
-    const binding = this.bindings.types[id];
+    const binding = own(this.bindings.types, id);
     let plan: ElementPlan;
     if (binding !== undefined) {
       this.assertKnownBuiltin(spec.base, modelId, attribute);
       plan = this.boundPlan(id, id, binding, modelId);
     } else {
       const base = this.builtinPlan(spec.base, modelId, attribute);
-      const facetNames = Object.keys(spec.facets).sort();
+      const facetNames = Object.keys(spec.facets).sort(compareBytes);
       if (facetNames.length === 0) {
         plan = base;
       } else {
@@ -213,14 +220,23 @@ export class PlanContext {
       const value = facets[name] as NeutralValue;
       if (name === "enumeration" && base.literal !== null && (stringy || integer || baseName === "boolean")) {
         enumeration = value;
-      } else if (stringy && name in STRING_FACETS) {
+      } else if (stringy && Object.hasOwn(STRING_FACETS, name)) {
         if (name === "pattern") {
           if (typeof value !== "string") return badFacet(name, "must be a string");
-          try {
-            new RegExp("^(?:" + value + ")$", "u");
-          } catch {
-            return badFacet(name, "is not a portable regular expression");
+          // The runtime compiles the wrapped form; compile the bare form too so a
+          // pattern like "a)|(?:b" cannot escape the wrapper.
+          for (const source of ["^(?:" + value + ")$", value]) {
+            try {
+              new RegExp(source, "u");
+            } catch {
+              return badFacet(name, "is not a portable regular expression");
+            }
           }
+          const verdict = vetPattern(value);
+          if (verdict.topAlternation) {
+            return badFacet(name, "has a top-level alternation that the ^(?:...)$ wrapper would change; group it explicitly");
+          }
+          if (!verdict.ok) return badFacet(name, `is refused: ${verdict.why ?? "unsafe regular expression"}`);
           parts.push(`pattern: ${JSON.stringify(value)}`);
         } else {
           if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
@@ -228,7 +244,7 @@ export class PlanContext {
           }
           parts.push(`${STRING_FACETS[name]}: ${value}`);
         }
-      } else if (integer && name in INTEGER_FACETS) {
+      } else if (integer && Object.hasOwn(INTEGER_FACETS, name)) {
         parts.push(`${INTEGER_FACETS[name]}: ${integerLiteral(value, (d) => badFacet(name, d))}`);
       } else {
         return unbound(name);
@@ -303,11 +319,12 @@ function bytesLiteral(value: NeutralValue, form: "base64" | "hex", reject: Rejec
 
 function hashLiteral(value: NeutralValue, reject: Reject): string {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return reject("expected an object");
-  return JSON.stringify(value);
+  // JSON.parse keeps a "__proto__" key as an own key; an object literal would set the prototype.
+  return `JSON.parse(${JSON.stringify(JSON.stringify(value))}) as rt.NeutralObject`;
 }
 
 function canonical(disc: Discriminator): string {
-  const cases = Object.keys(disc.cases).sort().map((k) => [k, disc.cases[k]]);
+  const cases = Object.keys(disc.cases).sort(compareBytes).map((k) => [k, disc.cases[k]]);
   return JSON.stringify([disc.attribute, cases]);
 }
 
@@ -378,7 +395,7 @@ function modelPlan(ctx: PlanContext, id: ModelId, discriminator: Discriminator |
     };
   }
   classOf(id, "dangling_reference");
-  const targets = [...new Set(Object.values(discriminator.cases))].sort();
+  const targets = [...new Set(Object.values(discriminator.cases))].sort(compareBytes);
   if (targets.length === 0) {
     return fail({ reason: "unknown_discriminator", model_id: modelId, attribute: attr.name, detail: "no cases" });
   }

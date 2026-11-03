@@ -96,7 +96,7 @@ function neutral(v: unknown, depth: number): string | null {
     }
     return null;
   }
-  if (isRecord(v)) {
+  if (isPlain(v)) {
     for (const key of Object.keys(v)) {
       const problem = neutral(v[key], depth + 1);
       if (problem !== null) return problem;
@@ -107,7 +107,7 @@ function neutral(v: unknown, depth: number): string | null {
 }
 
 export const neutralObject: Check = (v) =>
-  isRecord(v) ? neutral(v, 0) : "expected a neutral object";
+  isPlain(v) ? neutral(v, 0) : "expected a neutral object";
 
 const TZ = "(?:Z|[+-](?:0\\d|1[0-3]):[0-5]\\d|[+-]14:00)?";
 const DATE_RE = new RegExp("^(-?(?:[1-9]\\d{3,}|0\\d{3}))-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])" + TZ + "$");
@@ -217,6 +217,35 @@ export type Rec = { readonly [key: string]: unknown };
 
 export function isRecord(v: unknown): v is Rec {
   return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/** A plain data object: Object.prototype or null prototype (not a Map, class instance, ...). */
+export function isPlain(v: unknown): v is Rec {
+  if (typeof v !== "object" || v === null || Array.isArray(v)) return false;
+  const proto: unknown = Object.getPrototypeOf(v);
+  return proto === Object.prototype || proto === null;
+}
+
+/**
+ * A frozen deep copy of arrays and plain objects, so a stored collection or
+ * hash never aliases the caller's. Own keys are copied by definition, so a
+ * "__proto__" key stays an own key. Other values (instances, bigint, bytes
+ * copies) are kept; bytes are copied but cannot be frozen.
+ */
+export function snapshot<T>(v: T): T {
+  const copy = (x: unknown): unknown => {
+    if (Array.isArray(x)) return Object.freeze(x.map(copy));
+    if (x instanceof Uint8Array) return new Uint8Array(x);
+    if (isPlain(x)) {
+      const out: Record<string, unknown> = {};
+      for (const key of Object.keys(x)) {
+        Object.defineProperty(out, key, { value: copy(x[key]), enumerable: true, writable: true, configurable: true });
+      }
+      return Object.freeze(out);
+    }
+    return x;
+  };
+  return copy(v) as T;
 }
 
 export function record(input: unknown, out: Violation[]): Rec | null {

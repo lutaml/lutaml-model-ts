@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve, sep } from "node:path";
+import { lstatSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { LmlError } from "./contracts.js";
 import type { Bindings, SchemaFormat } from "./contracts.js";
@@ -73,6 +73,46 @@ function readOptional(root: string, path: string): string | undefined {
   }
 }
 
+function inside(real: string, path: string): boolean {
+  return path === real || path.startsWith(real + sep);
+}
+
+/** Creates the directories for `path` under `real`, refusing any symlink that leaves it. */
+function safeTarget(real: string, path: string): string {
+  const segments = path.split("/");
+  const escape = (): never => {
+    throw new Error(`refusing to write outside ${real}: ${path}`);
+  };
+  let current = real;
+  segments.forEach((segment, index) => {
+    if (segment === "" || segment === "." || segment === "..") escape();
+    const next = join(current, segment);
+    let stat = null;
+    try {
+      stat = lstatSync(next);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+    const last = index === segments.length - 1;
+    if (stat === null) {
+      if (!last) mkdirSync(next);
+      current = next;
+    } else if (stat.isSymbolicLink()) {
+      let resolved = "";
+      try {
+        resolved = realpathSync(next);
+      } catch {
+        escape(); // a dangling link cannot be proven to stay inside
+      }
+      if (!inside(real, resolved)) escape();
+      current = resolved;
+    } else {
+      current = next;
+    }
+  });
+  return current;
+}
+
 function generate(args: readonly string[]): number {
   const parsed = parseGenerate(args);
   const bindings: Bindings =
@@ -94,13 +134,12 @@ function generate(args: readonly string[]): number {
     for (const path of report.changed) process.stderr.write(`stale: ${path}\n`);
     return 1;
   }
-  for (const [path, text] of result.files) {
-    const target = join(root, path);
-    // Paths come from the generator (already validated relative, no traversal); belt and braces.
-    if (!target.startsWith(root + sep)) throw new Error(`refusing to write outside ${root}: ${path}`);
-    mkdirSync(dirname(target), { recursive: true });
-    writeFileSync(target, text, "utf8");
-  }
+  mkdirSync(root, { recursive: true });
+  const real = realpathSync(root);
+  // Resolve every target through the real filesystem before writing anything:
+  // a symlinked directory or file inside --out must not carry a write outside it.
+  const targets = [...result.files].map(([path, text]) => ({ target: safeTarget(real, path), text }));
+  for (const { target, text } of targets) writeFileSync(target, text, "utf8");
   process.stdout.write(`${result.manifestSha256}\n`);
   return 0;
 }
