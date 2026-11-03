@@ -20,7 +20,8 @@ const UNSUPPORTED_BUILTINS = ["double"];
 export const FORMATS: readonly string[] = ["xml", "json", "yaml", "toml"];
 const NAMESPACE_MODES = ["inherit", "unqualified", "uri"];
 const MANIFEST_TARGETS = ["ruby", "ts", "rust", "wasm"];
-const XML_RULE_KINDS = ["attribute", "element", "content", "sequence", "choice"];
+const XML_RULE_KINDS = ["attribute", "element", "content", "any_attribute", "sequence", "choice"];
+const ANY_ATTRIBUTE_KEYS = ["kind", "to"];
 const REGISTER_PATTERN = /^[A-Za-z0-9_.:-]+$/;
 const SHA256_PATTERN = /^sha256:[0-9a-f]{64}$/;
 export const ORDERED_CONTENT_MEMBER = "__lml_content";
@@ -183,7 +184,7 @@ function modelV2(node: Obj, at: string, expectedId?: string): string {
     fail("invalid_document", `key ${expectedId} does not match model ID ${id}`, at, { model_id: id });
   }
   attributesV2(node["attributes"], at, id);
-  if (has(node, "mappings")) mappingsV2(node["mappings"], at, id);
+  if (has(node, "mappings")) mappingsV2(node["mappings"], at, id, node["attributes"]);
   orderedContent(node, at, id);
   return id;
 }
@@ -325,7 +326,7 @@ function discriminatorShape(node: Tree | undefined, at: string, id: string): voi
   for (const [wire, target] of Object.entries(cases)) expectString(target, `${at}/cases${pointer(wire)}`);
 }
 
-function mappingsV2(mappings: Tree | undefined, at: string, id: string): void {
+function mappingsV2(mappings: Tree | undefined, at: string, id: string, attributes: Tree | undefined): void {
   expectObject(mappings, at + pointer("mappings"));
   for (const [format, mapping] of Object.entries(mappings)) {
     const loc = `${at}/mappings${pointer(format)}`;
@@ -340,7 +341,37 @@ function mappingsV2(mappings: Tree | undefined, at: string, id: string): void {
     const rules = mapping["rules"];
     expectArray(rules, `${loc}/rules`);
     rules.forEach((rule, i) => ruleV2(rule, `${loc}/rules/${i}`, id, format));
+    anyAttributeRules(rules, loc, id, format, attributes);
   }
+}
+
+/**
+ * any_attribute (map_all_attributes): xml only, top level only (compositors refuse it),
+ * at most one per mapping, `to` a declared non-collection builtin hash attribute.
+ * Ruby does not check its position in the list (the exporter always emits it last).
+ */
+function anyAttributeRules(rules: readonly Tree[], loc: string, id: string, format: string, attributes: Tree | undefined): void {
+  const found: number[] = [];
+  rules.forEach((rule, i) => { if (isObj(rule) && rule["kind"] === "any_attribute") found.push(i); });
+  const first = found[0];
+  if (first === undefined) return;
+  if (format !== "xml") fail("unsupported_mapping", "any_attribute is xml only", `${loc}/rules/${first}`, { model_id: id, format });
+  const second = found[1];
+  if (second !== undefined) {
+    fail("unsupported_mapping", "at most one any_attribute rule per mapping", `${loc}/rules/${second}`, { model_id: id, format });
+  }
+  const at = `${loc}/rules/${first}`;
+  const rule = rules[first] as Obj;
+  onlyKeys(rule, ANY_ATTRIBUTE_KEYS, at, "unsupported_mapping");
+  const to = rule["to"];
+  expectString(to, at + pointer("to"));
+  const target = (isArr(attributes) ? attributes : []).find((a): a is Obj => isObj(a) && a["name"] === to);
+  if (target === undefined) {
+    fail("dangling_reference", `any_attribute \`to\` ${describe(to)} is not an attribute of the model`, at + pointer("to"), { model_id: id, format });
+  }
+  const type = target["type"];
+  if (isObj(type) && type["kind"] === "builtin" && type["name"] === "hash" && !target["collection"]) return;
+  fail("unsupported_mapping", `any_attribute \`to\` ${describe(to)} must be a non-collection hash attribute`, at + pointer("to"), { model_id: id, format });
 }
 
 function mappingRoot(node: Tree | undefined, at: string, id: string, format: string): void {
@@ -378,6 +409,9 @@ function compositorV2(node: Tree | undefined, at: string, id: string, format: st
     const loc = `${at}/members/${i}`;
     expectObject(member, loc);
     const mk = member["kind"];
+    if (mk === "any_attribute") {
+      fail("unsupported_mapping", "any_attribute is not allowed inside a compositor", loc + pointer("kind"), { model_id: id, format });
+    }
     if (typeof mk === "string" && COMPOSITOR_KINDS.includes(mk)) compositorV2(member, loc, id, format);
     else ruleV2(member, loc, id, format);
   });
