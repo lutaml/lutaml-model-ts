@@ -75,10 +75,13 @@ describe("L1/L2: regex facets", () => {
     expect(codeOf(() => generateModels(patternBundle("a)|(?:b"), { types: {} }))).toBe("invalid_document");
   });
 
-  it("refuses a top-level alternation the wrapper would change; a grouped one is fine", () => {
-    expect(detailOf(() => generateModels(patternBundle("a|b"), { types: {} }))).toMatch(/top-level alternation/);
-    expect(codeOf(() => generateModels(patternBundle("(?:a|b)"), { types: {} }))).toBeUndefined();
-    expect(codeOf(() => generateModels(patternBundle("x(a|b)y"), { types: {} }))).toBeUndefined();
+  it("accepts a top-level alternation and anchors every branch", async () => {
+    expect(codeOf(() => generateModels(patternBundle("a|b"), { types: {} }))).toBeUndefined();
+    const { models } = await generated(patternBundle("ab|cd"));
+    expect(new models["A"]({ x: "ab" }).x).toBe("ab");
+    expect(new models["A"]({ x: "cd" }).x).toBe("cd");
+    expect(() => new models["A"]({ x: "abX" })).toThrow();
+    expect(() => new models["A"]({ x: "Xcd" })).toThrow();
   });
 
   it("an accepted pattern still anchors the whole value", async () => {

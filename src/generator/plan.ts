@@ -232,10 +232,9 @@ export class PlanContext {
               return badFacet(name, "is not a portable regular expression");
             }
           }
+          // A top-level alternation such as "a|b" is fine: the non-capturing
+          // wrapper anchors every branch, which is the XSD pattern meaning.
           const verdict = vetPattern(value);
-          if (verdict.topAlternation) {
-            return badFacet(name, "has a top-level alternation that the ^(?:...)$ wrapper would change; group it explicitly");
-          }
           if (!verdict.ok) return badFacet(name, `is refused: ${verdict.why ?? "unsafe regular expression"}`);
           parts.push(`pattern: ${JSON.stringify(value)}`);
         } else {
