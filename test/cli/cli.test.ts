@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it, vi } from "vitest";
@@ -106,3 +106,51 @@ describe("generate", () => {
 });
 
 void execFileSync;
+
+describe("L5: --out is resolved through the real filesystem", () => {
+  const base = ["generate", BUNDLE, "--bindings", BINDINGS, "--format", "json"];
+
+  it("refuses a symlinked directory that leaves --out, writing nothing outside", () => {
+    const out = join(SCRATCH, "esc-dir/out");
+    const outside = join(SCRATCH, "esc-dir/outside");
+    mkdirSync(out, { recursive: true });
+    mkdirSync(outside, { recursive: true });
+    symlinkSync(outside, join(out, "json"));
+    const result = cli([...base, "--out", out]);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("refusing to write outside");
+    expect(readdirSync(outside)).toEqual([]);
+  });
+
+  it("refuses a symlinked file that leaves --out, leaving its target untouched", () => {
+    const out = join(SCRATCH, "esc-file/out");
+    mkdirSync(out, { recursive: true });
+    const victim = join(SCRATCH, "esc-file/victim.txt");
+    writeFileSync(victim, "keep\n");
+    symlinkSync(victim, join(out, "models.ts"));
+    const result = cli([...base, "--out", out]);
+    expect(result.status).toBe(1);
+    expect(readFileSync(victim, "utf8")).toBe("keep\n");
+    expect(existsSync(join(out, "manifest.json"))).toBe(false);
+  });
+
+  it("refuses a dangling symlink", () => {
+    const out = join(SCRATCH, "esc-dangling/out");
+    mkdirSync(out, { recursive: true });
+    symlinkSync(join(SCRATCH, "esc-dangling/nowhere"), join(out, "models.ts"));
+    expect(cli([...base, "--out", out]).status).toBe(1);
+  });
+
+  it("control: a symlink that stays inside --out, and a symlinked --out itself, are fine", () => {
+    const real = join(SCRATCH, "ok/real");
+    mkdirSync(real, { recursive: true });
+    mkdirSync(join(real, "inner"));
+    symlinkSync(join(real, "inner"), join(real, "json"));
+    const link = join(SCRATCH, "ok/link");
+    symlinkSync(real, link);
+    const result = cli([...base, "--out", link]);
+    expect(result.status).toBe(0);
+    expect(existsSync(join(real, "inner/codecs.ts"))).toBe(true);
+    expect(existsSync(join(real, "manifest.json"))).toBe(true);
+  });
+});

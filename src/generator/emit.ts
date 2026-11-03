@@ -4,7 +4,6 @@ import { planAttribute } from "./plan.js";
 import type { ElementPlan, PlanContext } from "./plan.js";
 
 const ORDERED_MEMBER = "__lml_content";
-const FORBIDDEN_MEMBERS = new Set(["constructor", "__proto__"]);
 
 interface Member {
   readonly name: string;
@@ -14,6 +13,8 @@ interface Member {
   readonly omittable: boolean;
   readonly filler: string | null;
   readonly specLine: string | null;
+  /** Collection or hash member: stored as a frozen copy. */
+  readonly snapshot: boolean;
 }
 
 function arrayOf(ts: string): string {
@@ -68,7 +69,8 @@ function normalized(attr: AttributeSpec): AttributeSpec {
 
 function buildMember(ctx: PlanContext, source: AttributeSpec, modelId: string, location: string): Member {
   const attr = normalized(source);
-  if (FORBIDDEN_MEMBERS.has(attr.name)) {
+  // Any Object.prototype member (toString, valueOf, constructor, __proto__ ...) is refused.
+  if (attr.name in Object.prototype) {
     fail({ reason: "reserved_member", model_id: modelId, attribute: attr.name, location: location + "/name" });
   }
   checkCollection(attr, modelId, location);
@@ -89,15 +91,25 @@ function buildMember(ctx: PlanContext, source: AttributeSpec, modelId: string, l
   const specLine =
     `rt.attr(out, o, { name: ${JSON.stringify(attr.name)}, required: ${attr.required}, ` +
     `filled: ${filler !== null}, collection: ${collection}, item: ${plan.check} });`;
-  return { name: attr.name, prop: declName(attr.name), initType, fieldType, omittable, filler, specLine };
+  const snapshot = attr.collection !== false || plan.check === "rt.neutralObject";
+  return { name: attr.name, prop: declName(attr.name), initType, fieldType, omittable, filler, specLine, snapshot };
 }
 
-function constructorAssign(m: Member): string {
-  const src = `init${access(m.name)}`;
+/**
+ * Reads own properties only (the predicate validate's present() uses), so an
+ * inherited or prototype-polluted value is never assigned unvalidated.
+ * Collections and hashes are snapshotted: copied and frozen.
+ */
+function constructorAssign(m: Member, className: string): string {
+  const key = JSON.stringify(m.name);
+  const read = `const v = Object.hasOwn(init, ${key}) ? init${access(m.name)} : undefined;`;
   const dst = `this${access(m.name)}`;
-  if (!m.omittable) return `${dst} = ${src};`;
-  if (m.filler === null) return `${dst} = ${src} === undefined ? rt.ABSENT : ${src};`;
-  return `${dst} = ${src} === undefined || ${src} === rt.ABSENT ? ${m.filler} : ${src};`;
+  const wrap = (expr: string): string => (m.snapshot ? `rt.snapshot(${expr})` : expr);
+  let value: string;
+  if (!m.omittable) value = `v as ${className}Init[${key}]`;
+  else if (m.filler === null) value = "v === undefined ? rt.ABSENT : v";
+  else value = `v === undefined || v === rt.ABSENT ? ${m.filler} : v`;
+  return `{ ${read} ${dst} = ${wrap(value)}; }`;
 }
 
 export function emitClass(ctx: PlanContext, className: string, modelId: ModelId, doc: ModelDocument): string {
@@ -135,9 +147,12 @@ export function emitClass(ctx: PlanContext, className: string, modelId: ModelId,
   lines.push(`  constructor(init: ${className}Init${mandatory ? "" : " = {}"}) {`);
   lines.push(`    const problems = ${className}.validate(init);`);
   lines.push(`    if (problems.length > 0) throw new rt.ValidationError(${className}.modelId, problems);`);
-  for (const m of members) lines.push(`    ${constructorAssign(m)}`);
+  for (const m of members) lines.push(`    ${constructorAssign(m, className)}`);
   if (ordered) {
-    lines.push(`    this.${ORDERED_MEMBER} = init.${ORDERED_MEMBER} === undefined ? rt.ABSENT : init.${ORDERED_MEMBER};`);
+    lines.push(
+      `    { const v = Object.hasOwn(init, ${JSON.stringify(ORDERED_MEMBER)}) ? init.${ORDERED_MEMBER} : undefined; ` +
+        `this.${ORDERED_MEMBER} = rt.snapshot(v === undefined ? rt.ABSENT : v); }`,
+    );
   }
   if (filledAny) {
     lines.push(`    const effective = ${className}.validate(this);`);

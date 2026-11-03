@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { LmlError } from "../contracts.js";
 import type { Bundle, Checksum } from "../contracts.js";
 import { RawFloat, type Raw } from "./raw.js";
 import { compareBytes, type Tree } from "./validator.js";
@@ -10,7 +11,9 @@ type Node = Raw | Tree | undefined;
  * positions -8..15, otherwise `d[.ddd]e+XX`). v1 documents only.
  */
 export function rubyFloat(value: number): string {
-  if (!Number.isFinite(value)) throw new RangeError("non-finite float");
+  if (!Number.isFinite(value)) {
+    throw new LmlError({ reason: "invalid_document", detail: "a non-finite float has no JSON form" });
+  }
   if (value === 0) return Object.is(value, -0) ? "-0.0" : "0.0";
   const [mantissa = "", exp = "0"] = Math.abs(value).toExponential().split("e");
   const digits = mantissa.replace(".", "");

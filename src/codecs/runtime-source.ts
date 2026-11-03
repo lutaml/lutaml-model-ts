@@ -80,6 +80,14 @@ export function run<T>(modelId: string, fn: () => T): T {
   try {
     return fn();
   } catch (error) {
+    if (error instanceof RangeError && /call stack/i.test(error.message)) {
+      throw new LmlError({
+        reason: "invalid_document",
+        model_id: modelId,
+        format: FORMAT,
+        detail: "value is nested too deeply",
+      });
+    }
     if (!(error instanceof WireError)) throw error;
     const info: ErrorDetail = {
       reason: error.reason,

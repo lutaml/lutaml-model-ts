@@ -15,6 +15,7 @@ import type {
   TypeBinding,
 } from "../contracts.js";
 import { access, targetClassName } from "../generator/names.js";
+import { compareBytes } from "../lml/validator.js";
 import { effectiveDiscriminator } from "../generator/plan.js";
 import { codecRuntimeSource } from "./runtime-source.js";
 
@@ -50,10 +51,6 @@ export function fromSubdirectory(specifier: string): string {
   if (specifier.startsWith("./")) return "." + specifier;
   if (specifier.startsWith("../")) return "../" + specifier;
   return specifier;
-}
-
-function byCodePoint(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 class Refusal {
@@ -94,7 +91,9 @@ class Context {
   ) {}
 
   mapping(id: ModelId): KeyValueMapping | undefined {
-    return this.bundle.models[id]?.mappings[this.format];
+    const doc = Object.hasOwn(this.bundle.models, id) ? this.bundle.models[id] : undefined;
+    // A model without `mappings` has no mappings.
+    return (doc?.mappings as Partial<Record<string, KeyValueMapping>> | undefined)?.[this.format];
   }
 
   bind(binding: TypeBinding): BoundUse {
@@ -152,8 +151,8 @@ function polymorphicWire(ctx: Context, attr: AttributeSpec, disc: Discriminator 
   if (baseRule === undefined) {
     return refuse.unsupported(`discriminator attribute ${disc.attribute} has no ${ctx.format} rule on ${attr.type.id}`, attr.name);
   }
-  const wireCases = Object.keys(disc.cases).sort(byCodePoint);
-  const targets = [...new Set(Object.values(disc.cases))].sort(byCodePoint);
+  const wireCases = Object.keys(disc.cases).sort(compareBytes);
+  const targets = [...new Set(Object.values(disc.cases))].sort(compareBytes);
   if (targets.length === 0) return refuse.raise("unknown_discriminator", "no cases", attr.name);
   const classOf = (target: ModelId): string => {
     const name = ctx.classNames.get(target);
@@ -182,7 +181,7 @@ function elementWire(ctx: Context, attr: AttributeSpec, disc: Discriminator | un
   const { type } = attr;
   if (type.kind === "builtin") return builtinWire(ctx, type.name, refuse, attr.name, type.name);
   if (type.kind === "value") {
-    const spec = ctx.bundle.value_types[type.id];
+    const spec = Object.hasOwn(ctx.bundle.value_types, type.id) ? ctx.bundle.value_types[type.id] : undefined;
     if (spec === undefined) return refuse.raise("dangling_reference", `value type ${type.id}`, attr.name);
     const binding = Object.hasOwn(ctx.bindings.types, type.id) ? ctx.bindings.types[type.id] : undefined;
     if (binding !== undefined) {
@@ -310,7 +309,7 @@ export function createKeyValueEmitter(format: KeyValueFormat, options: CodecOpti
   return {
     name: format,
     emit(bundle: Bundle, bindings: Bindings): SourceMap {
-      const ids = Object.keys(bundle.models).sort(byCodePoint);
+      const ids = Object.keys(bundle.models).sort(compareBytes);
       const classNames = new Map<ModelId, string>();
       for (const id of ids) {
         const doc = bundle.models[id];

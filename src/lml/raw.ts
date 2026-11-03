@@ -27,6 +27,12 @@ export type Raw =
   | RawMap;
 export type RawMap = ReadonlyMap<unknown, Raw>;
 
+/** A float that overflows to Infinity (1e400) or is NaN/Inf (YAML) has no portable form. */
+function finiteFloat(value: number): RawFloat {
+  if (!Number.isFinite(value)) fail("invalid_document", "non-finite float is not accepted", "");
+  return new RawFloat(value);
+}
+
 function intValue(big: bigint): number | bigint {
   const n = Number(big);
   return Number.isSafeInteger(n) ? n : big;
@@ -94,7 +100,7 @@ class JsonParser {
     if (m === null) this.error("unexpected character");
     this.pos += m[0].length;
     if (m[1] === undefined && m[2] === undefined) return intValue(BigInt(m[0]));
-    return new RawFloat(Number(m[0]));
+    return finiteFloat(Number(m[0]));
   }
 
   private string(): string {
@@ -206,7 +212,7 @@ function nodeToRaw(node: unknown): Raw {
 function scalarToRaw(value: unknown): Raw {
   if (value === null || typeof value === "boolean" || typeof value === "string") return value;
   if (typeof value === "bigint") return intValue(value);
-  if (typeof value === "number") return new RawFloat(value);
+  if (typeof value === "number") return finiteFloat(value);
   return fail("invalid_document", `unsupported YAML value ${typeof value}`, "");
 }
 
