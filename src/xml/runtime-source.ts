@@ -104,30 +104,139 @@ function setOwn(target: Record<string, unknown>, key: string, value: unknown): v
 const READER = String.raw`
 // ---------------------------------------------------------------- reading
 
+/**
+ * Explicit read limits. moxml-ts answers namespaceUri() and attributes() in
+ * time proportional to the node's siblings, so a wide element costs
+ * quadratic time (40,000 siblings: tens of seconds) and so does reading CDATA
+ * through XPath. These limits bound that cost; a document over a limit is
+ * refused with invalid_document and the limit's name as the error rule.
+ */
+export interface ReadLimits {
+  /** Element nodes read in one document (default 20000), rule "max_elements". */
+  readonly maxElements: number;
+  /** Child nodes of one element (default 1000), rule "max_children". */
+  readonly maxChildren: number;
+  /** CDATA nodes in one document (default 1000), rule "max_cdata_nodes". */
+  readonly maxCdata: number;
+}
+
+export interface ReadOptions {
+  readonly limits?: Partial<ReadLimits>;
+}
+
+export const DEFAULT_LIMITS: ReadLimits = { maxElements: 20_000, maxChildren: 1_000, maxCdata: 1_000 };
+
+/** Per-read state shared by every El of one document. */
+interface Ctx {
+  readonly limits: ReadLimits;
+  elements: number;
+  cdata: number;
+}
+
+function newCtx(options: ReadOptions | undefined): Ctx {
+  const given = options?.limits ?? {};
+  return {
+    limits: {
+      maxElements: given.maxElements ?? DEFAULT_LIMITS.maxElements,
+      maxChildren: given.maxChildren ?? DEFAULT_LIMITS.maxChildren,
+      maxCdata: given.maxCdata ?? DEFAULT_LIMITS.maxCdata,
+    },
+    elements: 0,
+    cdata: 0,
+  };
+}
+
+function limitFail(rule: string, detail: string, loc: string): never {
+  const error = new XmlError("invalid_document", detail, loc);
+  error.rule = rule;
+  throw error;
+}
+
+interface Attr {
+  readonly prefix: string;
+  readonly localName: string;
+  readonly namespaceUri: string;
+  readonly value: string;
+}
+
+/** Everything read from a node handle at most once. */
+interface Memo {
+  kids?: Kid[];
+  ns?: string;
+  attrs?: readonly Attr[];
+}
+
 /** One parsed element: its node, the XPath of that node and an error location. */
 export interface El {
   readonly doc: Document;
   readonly node: Node;
   readonly xp: string;
   readonly loc: string;
+  readonly ctx: Ctx;
+  readonly memo: Memo;
 }
 
 interface Kid {
   readonly kind: number;
   readonly node: Node;
   readonly xp: string;
+  text?: string;
 }
 
 function kids(el: El): Kid[] {
-  return el.node.children().map((node, i) => ({ kind: node.kind(), node, xp: el.xp + "/node()[" + (i + 1) + "]" }));
+  const known = el.memo.kids;
+  if (known !== undefined) return known;
+  const nodes = el.node.children();
+  const limits = el.ctx.limits;
+  if (nodes.length > limits.maxChildren) {
+    limitFail("max_children", "element has " + nodes.length + " child nodes; the limit is " + limits.maxChildren, el.loc);
+  }
+  const made = nodes.map((node, i): Kid => ({ kind: node.kind(), node, xp: el.xp + "/node()[" + (i + 1) + "]" }));
+  for (const kid of made) {
+    if (kid.kind === KIND_ELEMENT && ++el.ctx.elements > limits.maxElements) {
+      limitFail("max_elements", "document has more than " + limits.maxElements + " elements", el.loc);
+    }
+    if (kid.kind === KIND_CDATA && ++el.ctx.cdata > limits.maxCdata) {
+      limitFail("max_cdata_nodes", "document has more than " + limits.maxCdata + " CDATA nodes", el.loc);
+    }
+  }
+  el.memo.kids = made;
+  return made;
+}
+
+function cdataText(el: El, kid: Kid): string {
+  return (kid.text ??= el.doc.xpath("string(" + kid.xp + ")"));
 }
 
 export function localOf(el: El): string {
   return el.node.localName() ?? "";
 }
 
+/** Namespace of an element ("" is none). A prefix with no binding is refused. */
 export function nsOf(el: El): string {
-  return el.node.namespaceUri() ?? "";
+  const known = el.memo.ns;
+  if (known !== undefined) return known;
+  const uri = el.node.namespaceUri() ?? "";
+  const qualified = el.node.qualifiedName() ?? "";
+  if (uri === "" && qualified.includes(":")) {
+    xmlFail("namespace prefix " + qualified.slice(0, qualified.indexOf(":")) + " is not bound", el.loc);
+  }
+  el.memo.ns = uri;
+  return uri;
+}
+
+function attributesOf(el: El): readonly Attr[] {
+  const known = el.memo.attrs;
+  if (known !== undefined) return known;
+  const list = el.node.attributes() ?? [];
+  for (const a of list) {
+    const prefix = a.prefix;
+    if (prefix !== "" && prefix !== "xml" && prefix !== "xmlns" && a.namespaceUri === "") {
+      xmlFail("namespace prefix " + prefix + " is not bound", el.loc + "/@" + a.localName);
+    }
+  }
+  el.memo.attrs = list;
+  return list;
 }
 
 /** Direct text of an element: text nodes, plus CDATA unless excluded. */
@@ -135,7 +244,7 @@ export function textOf(el: El, cdata = true): string {
   let out = "";
   for (const kid of kids(el)) {
     if (kid.kind === KIND_TEXT) out += kid.node.text() ?? "";
-    else if (kid.kind === KIND_CDATA && cdata) out += el.doc.xpath("string(" + kid.xp + ")");
+    else if (kid.kind === KIND_CDATA && cdata) out += cdataText(el, kid);
   }
   return out;
 }
@@ -198,13 +307,13 @@ function elementChildren(el: El): El[] {
     const name = kid.node.localName() ?? "";
     const n = seen.get(name) ?? 0;
     seen.set(name, n + 1);
-    out.push({ doc: el.doc, node: kid.node, xp: kid.xp, loc: el.loc + "/" + name + "[" + n + "]" });
+    out.push({ doc: el.doc, node: kid.node, xp: kid.xp, loc: el.loc + "/" + name + "[" + n + "]", ctx: el.ctx, memo: {} });
   }
   return out;
 }
 
 function findAttribute(el: El, rule: AttrRule): string | null {
-  for (const a of el.node.attributes() ?? []) {
+  for (const a of attributesOf(el)) {
     if (rule.names.includes(a.localName) && accepts(rule.ns, a.namespaceUri)) return a.value;
   }
   return null;
@@ -217,6 +326,11 @@ export function attributeOf(el: El, names: readonly string[], ns: Accept): strin
 
 function inScope(el: El, prefix: string): string | undefined {
   return el.node.inScopeNamespaces()?.find((b) => b.prefix === prefix)?.uri;
+}
+
+function repeatedSingleton(spec: ModelSpec, rule: ElemRule, child: El): never {
+  const name = rule.names[0] ?? "";
+  throw new XmlError("invalid_document", "element " + name + " occurs more than once but maps a single value", child.loc).context(spec.id, rule.to, name);
 }
 
 function withContext<T>(spec: ModelSpec, attribute: string, rule: string, loc: string, fn: () => T): T {
@@ -254,7 +368,7 @@ export function readModel<T>(el: El, spec: ModelSpec, cls: new (init: never) => 
       const rule = spec.elems.find((r) => matchesElem(r, child));
       if (rule === undefined) continue;
       const taken = counts.get(rule.to) ?? 0;
-      if (!rule.collection && taken > 0) continue;
+      if (!rule.collection && taken > 0) repeatedSingleton(spec, rule, child);
       const value = withContext(spec, rule.to, rule.names[0] ?? "", child.loc, () => rule.dec(child));
       counts.set(rule.to, taken + 1);
       if (rule.collection) {
@@ -279,7 +393,7 @@ export function readModel<T>(el: El, spec: ModelSpec, cls: new (init: never) => 
       }
     } else if (kid.kind === KIND_CDATA) {
       if (spec.tokens) {
-        tokens.push({ kind: "cdata", literal: el.doc.xpath("string(" + kid.xp + ")") });
+        tokens.push({ kind: "cdata", literal: cdataText(el, kid) });
       }
     } else if (spec.tokens) {
       xmlFail("comments and processing instructions have no ordered-content token", el.loc, "invalid_ordered_content");
@@ -444,10 +558,12 @@ export function poly<T>(
 }
 
 /** Checks the root element against the model's name and namespace. */
-export function rootEl(doc: Document, spec: ModelSpec): El {
+export function rootEl(doc: Document, spec: ModelSpec, options?: ReadOptions): El {
   const node = doc.root();
   if (node === undefined) return xmlFail("document has no root element", "/");
-  const el: El = { doc, node, xp: "/*[1]", loc: "/" + (node.localName() ?? "") };
+  const ctx = newCtx(options);
+  ctx.elements = 1;
+  const el: El = { doc, node, xp: "/*[1]", loc: "/" + (node.localName() ?? ""), ctx, memo: {} };
   if (spec.root === null) {
     throw new XmlError("unsupported_mapping", "model has no root element mapping").context(spec.id);
   }
@@ -461,26 +577,51 @@ export function rootEl(doc: Document, spec: ModelSpec): El {
   return el;
 }
 
+const MARKUP = /<!--[\s\S]*?-->|<!\[CDATA\[[\s\S]*?\]\]>|<\?[\s\S]*?\?>|<([^\s/>!?]+)((?:\s+[^\s=/>]+\s*=\s*(?:"[^"]*"|'[^']*'))*)\s*\/?>/g;
+const ATTRIBUTE = /\s+([^\s=/>]+)\s*=\s*(?:"[^"]*"|'[^']*')/g;
+
+/**
+ * Refuses a start tag that repeats an attribute name. moxml-ts keeps only the
+ * first of two equal attributes, so the duplicate is invisible once parsed;
+ * this scans the already well-formed text once, linearly. A Document handed to
+ * decode() directly was parsed elsewhere and is not checked.
+ */
+function refuseDuplicateAttributes(text: string): void {
+  for (const m of text.matchAll(MARKUP)) {
+    const open = m[2];
+    if (open === undefined || open === "") continue;
+    const seen = new Set<string>();
+    for (const a of open.matchAll(ATTRIBUTE)) {
+      const name = a[1] as string;
+      if (seen.has(name)) xmlFail("attribute " + name + " is repeated on element " + (m[1] ?? ""), "/input");
+      seen.add(name);
+    }
+  }
+}
+
 /** Parses text under the input guards (no DOCTYPE, bounded size). */
 export async function parseText(text: string): Promise<Document> {
   if (text.length > MAX_INPUT) return xmlFail("input exceeds " + MAX_INPUT + " characters", "/input");
   if (/<!DOCTYPE/i.test(text)) {
     return xmlFail("DOCTYPE is refused: the parser has no entity-expansion limit", "/input");
   }
+  let doc: Document;
   try {
-    return await parse(text);
+    doc = await parse(text);
   } catch (error) {
     return xmlFail(error instanceof Error ? error.message : "malformed XML", "/input");
   }
+  refuseDuplicateAttributes(text);
+  return doc;
 }
 
 export interface XmlCodec<T> {
   readonly modelId: string;
   readonly format: "xml";
   /** Reads an already parsed document. */
-  decode(doc: Document): T;
+  decode(doc: Document, options?: ReadOptions): T;
   /** Parses XML text (async: the engine initialises lazily), then decodes it. */
-  parse(text: string): Promise<T>;
+  parse(text: string, options?: ReadOptions): Promise<T>;
   /** Writes a new document for the value. */
   encode(value: T): Promise<Document>;
   /** Compact XML text of encode(value). */
@@ -493,7 +634,7 @@ export function xmlCodec<T>(
   write: ((w: Writer, value: T) => Node) | null,
 ): XmlCodec<T> {
   const modelId = spec.id;
-  const decode = (doc: Document): T => run(modelId, () => read(rootEl(doc, spec)));
+  const decode = (doc: Document, options?: ReadOptions): T => run(modelId, () => read(rootEl(doc, spec, options)));
   const encode = (value: T): Promise<Document> =>
     runAsync(modelId, async () => {
       if (write === null) throw new XmlError("unsupported_mapping", "model has no root element mapping").context(modelId);
@@ -507,8 +648,8 @@ export function xmlCodec<T>(
     modelId,
     format: "xml",
     decode,
-    async parse(text) {
-      return decode(await runAsync(modelId, () => parseText(text)));
+    async parse(text, options) {
+      return decode(await runAsync(modelId, () => parseText(text)), options);
     },
     encode,
     async stringify(value) {

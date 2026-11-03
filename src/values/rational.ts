@@ -78,6 +78,33 @@ export function equals(a: Rational, b: Rational): boolean {
 const DECIMAL_LEXICAL = /^([+-]?)([0-9]*)(?:\.([0-9]*))?$/;
 
 /**
+ * Most digits (integer plus fractional) a decimal lexical string may have.
+ * Euclid-style reduction and BigInt arithmetic are superlinear, so an
+ * unbounded lexical is a denial of service (40,000 digits took 3.8 s before
+ * this cap). Longer input is refused as invalid_document, rule
+ * `max_decimal_digits`.
+ */
+export const MAX_DECIMAL_DIGITS = 10_000;
+
+/** Number of trailing zero bits of a positive bigint, at most `limit`. */
+function twoAdicValuation(n: bigint, limit: bigint): bigint {
+  const lowest = n & -n;
+  const bits = BigInt(lowest.toString(2).length - 1);
+  return bits < limit ? bits : limit;
+}
+
+/** Strips up to `limit` factors of 5 from a positive bigint. */
+function stripFives(n: bigint, limit: bigint): [bigint, bigint] {
+  let rest = n;
+  let count = 0n;
+  while (count < limit && rest % 5n === 0n) {
+    rest /= 5n;
+    count++;
+  }
+  return [rest, count];
+}
+
+/**
  * Exact value of a plain decimal lexical string (`[+-]?digits[.digits]`,
  * at least one digit). Exponent notation is refused: it is not part of the
  * portable decimal-string profile.
@@ -89,9 +116,23 @@ export function rationalFromDecimalString(lexical: string): Rational {
   if (m === null || intPart.length + fracPart.length === 0) {
     throw valueError("invalid_document", `not a decimal string: ${JSON.stringify(lexical)}`);
   }
+  if (intPart.length + fracPart.length > MAX_DECIMAL_DIGITS) {
+    throw valueError(
+      "invalid_document",
+      `decimal string has ${intPart.length + fracPart.length} digits; the limit is ${MAX_DECIMAL_DIGITS}`,
+      "max_decimal_digits",
+    );
+  }
   const digits = BigInt(intPart + fracPart);
   const signed = m[1] === "-" ? -digits : digits;
-  return rational(signed, 10n ** BigInt(fracPart.length));
+  const scale = BigInt(fracPart.length);
+  if (digits === 0n || scale === 0n) return Object.freeze({ numerator: digits === 0n ? 0n : signed, denominator: 1n });
+  // The denominator is 10^scale = 2^scale * 5^scale: reduce by the factors of 2 and 5
+  // the numerator actually has, with no gcd.
+  const twos = twoAdicValuation(digits, scale);
+  const [rest, fives] = stripFives(digits >> twos, scale);
+  const denominator = 2n ** (scale - twos) * 5n ** (scale - fives);
+  return Object.freeze({ numerator: m[1] === "-" ? -rest : rest, denominator });
 }
 
 /**

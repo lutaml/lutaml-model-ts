@@ -126,6 +126,9 @@ const OVERRIDES: Record<string, Override> = {
   "person-wrong-namespace": { error: "invalid_document" },
   // Ruby reads an unparseable integer as nil.
   "person-bad-integer": { error: "invalid_document", attribute: "age" },
+  // Ruby keeps the first of a repeated single-valued element; the TS reader refuses it (REVIEW-TS-1 L6).
+  "person-alias-both-first-wins": { error: "invalid_document" },
+  "person-scalar-duplicate-first-wins": { error: "invalid_document" },
   // Ruby falls back to the declared type for an unknown discriminator value.
   "kennel-poly-unknown-kind": { error: "unknown_discriminator" },
 };
@@ -273,7 +276,7 @@ describe.skipIf(!available)("generated XML codecs (moxml-ts)", () => {
         expect(dump(await codec.parse(text)), `${c.id}: ${text}`).toEqual(expected);
         checked += 1;
       }
-      expect(checked).toBeGreaterThanOrEqual(24);
+      expect(checked).toBeGreaterThanOrEqual(22);
     });
 
     it("emits namespaces by prefix and by default declaration", async () => {
@@ -395,5 +398,108 @@ describe.skipIf(!available)("hand-written bundles: rule namespaces the Ruby DSL 
     const info = await infoOf(() => codec.stringify(value));
     expect(info).toMatchObject({ reason: "unsupported_mapping", format: "xml" });
     expect(info?.detail).toMatch(/declares no prefix/);
+  });
+});
+
+describe.skipIf(!available)("reader limits and strictness (REVIEW-TS-1 H1, L6)", () => {
+  const attr = (name: string, extra: object = {}): unknown => ({
+    name, type: { kind: "builtin", name: "string" }, required: false, collection: false,
+    default: { present: false }, initialize_empty: false, ...extra,
+  });
+  // N: a recursive node whose children are N elements, with text, an attribute `u` and a singleton `t`.
+  const bundle: Bundle = {
+    lml_bundle: 1,
+    roots: ["N@default"],
+    models: {
+      "N@default": {
+        lml: 2, model: "N", register: "default",
+        attributes: [
+          attr("kids", { type: { kind: "model", id: "N@default" }, collection: { min: 0, max: null } }),
+          attr("text"), attr("u"), attr("t"),
+        ],
+        mappings: { xml: { root: { element: "n" }, rules: [
+          { kind: "element", name: ["n"], to: "kids" },
+          { kind: "element", name: ["t"], to: "t" },
+          { kind: "attribute", name: ["u"], to: "u" },
+          { kind: "content", to: "text" },
+        ] } },
+      },
+    } as never,
+    value_types: {},
+    capabilities: ["xml"],
+  };
+  let codec: Loaded;
+  const ready = async (): Promise<Loaded> => (codec ??= (await load(generateInto(bundle)))["xml"].CODECS["N@default"]);
+
+  // Before the fix 10,000 siblings took 6.0 s and 40,000 over a minute (moxml-ts
+  // namespaceUri()/attributes() are O(siblings)); the limit refuses before any of it.
+  it("refuses 40,000 sibling children by max_children, well under a second", { timeout: 180_000 }, async () => {
+    const c = await ready();
+    const text = "<n>" + "<n/>".repeat(40_000) + "</n>";
+    const started = performance.now();
+    const info = await infoOf(() => c.parse(text));
+    const elapsed = performance.now() - started;
+    expect(info).toMatchObject({ reason: "invalid_document", rule: "max_children", format: "xml" });
+    expect(elapsed).toBeLessThan(1000);
+  });
+
+  it("decodes a wide element within the default limit in bounded time", { timeout: 180_000 }, async () => {
+    const c = await ready();
+    const started = performance.now();
+    const value = await c.parse("<n>" + "<n/>".repeat(1000) + "</n>");
+    const elapsed = performance.now() - started;
+    expect(value.kids).toHaveLength(1000);
+    expect(elapsed).toBeLessThan(1000);
+  });
+
+  it("limits are options: a raised max_children admits what the default refuses", { timeout: 180_000 }, async () => {
+    const c = await ready();
+    const text = "<n>" + "<n/>".repeat(60) + "</n>";
+    expect((await infoOf(() => c.parse(text, { limits: { maxChildren: 50 } })))?.rule).toBe("max_children");
+    expect((await c.parse(text, { limits: { maxChildren: 60 } })).kids).toHaveLength(60);
+  });
+
+  it("refuses more elements than max_elements and more CDATA nodes than max_cdata_nodes", { timeout: 180_000 }, async () => {
+    const c = await ready();
+    const tree = "<n>" + "<n><n/><n/></n>".repeat(5) + "</n>";
+    expect((await infoOf(() => c.parse(tree, { limits: { maxElements: 10 } })))).toMatchObject({ reason: "invalid_document", rule: "max_elements" });
+    expect((await c.parse(tree, { limits: { maxElements: 100 } })).kids).toHaveLength(5);
+    const cdata = "<n>" + "<![CDATA[a]]>".repeat(20) + "</n>";
+    expect((await infoOf(() => c.parse(cdata, { limits: { maxCdata: 10 } })))).toMatchObject({ reason: "invalid_document", rule: "max_cdata_nodes" });
+    expect((await c.parse(cdata, { limits: { maxCdata: 20 } })).text).toBe("a".repeat(20));
+  });
+
+  it("a wide CDATA run is refused by default, not read at quadratic cost", { timeout: 180_000 }, async () => {
+    const c = await ready();
+    const started = performance.now();
+    const info = await infoOf(() => c.parse("<n>" + ("<n>" + "<![CDATA[a]]>".repeat(800) + "</n>").repeat(3) + "</n>"));
+    expect(info?.rule).toBe("max_cdata_nodes");
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
+
+  it("refuses a repeated single-valued element by name", { timeout: 180_000 }, async () => {
+    const c = await ready();
+    expect((await c.parse("<n><t>a</t></n>")).t).toBe("a");
+    const info = await infoOf(() => c.parse("<n><t>a</t><t>b</t></n>"));
+    expect(info).toMatchObject({ reason: "invalid_document", attribute: "t", rule: "t" });
+    expect(info?.detail).toMatch(/element t occurs more than once/);
+  });
+
+  it("refuses a repeated attribute by name (text parse)", { timeout: 180_000 }, async () => {
+    const c = await ready();
+    expect((await c.parse('<n u="1"/>')).u).toBe("1");
+    expect((await c.parse("<n t='a>b' u='1'>x</n>")).u).toBe("1");
+    const info = await infoOf(() => c.parse('<n u="1" u="2"/>'));
+    expect(info).toMatchObject({ reason: "invalid_document", location: "/input" });
+    expect(info?.detail).toMatch(/attribute u is repeated/);
+    // The same name inside a comment, CDATA or another element's value is not a repeat.
+    expect((await c.parse('<n u="1"><!-- <x a="1" a="2"/> --><![CDATA[<x a="1" a="2"/>]]></n>')).u).toBe("1");
+  });
+
+  it("refuses an unbound element or attribute prefix", { timeout: 180_000 }, async () => {
+    const c = await ready();
+    expect(await infoOf(() => c.parse("<q:n/>"))).toMatchObject({ reason: "invalid_document", location: "/n" });
+    expect((await infoOf(() => c.parse("<q:n/>")))?.detail).toMatch(/prefix q is not bound/);
+    expect((await infoOf(() => c.parse('<n a:u="1"/>')))?.detail).toMatch(/prefix a is not bound/);
   });
 });
