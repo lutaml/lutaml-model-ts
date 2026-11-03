@@ -399,6 +399,13 @@ export function readModel<T>(el: El, spec: ModelSpec, cls: new (init: never) => 
       xmlFail("comments and processing instructions have no ordered-content token", el.loc, "invalid_ordered_content");
     }
   }
+  if (spec.content !== null && spec.content.collection && (spec.mixed || spec.ordered) && all.length === 0) {
+    // An element with no child node at all (<mo/>, <mo></mo>) reads as one empty text, as Ruby's from_xml with a register does.
+    // Ruby's rule for an element whose only children are elements is not uniform (checked: one unmapped or empty
+    // mapped child adds the empty text, two children or one string-valued child do not), so that case is left alone.
+    texts.push("");
+    if (spec.tokens) tokens.push({ kind: "text", attribute: spec.content.to, index: 0 });
+  }
   if (spec.content !== null) {
     const content = spec.content;
     if (content.collection) {
