@@ -1,7 +1,20 @@
-// Extension points (not yet present; do not export nonexistent modules):
-//   06b: ./lml/index.js        (loadBundle)
-//   06c: ./generator/index.js  (generateModels)
-//   06d: ./values/index.js     (exact value helpers)
-//   06e: ./codecs/index.js     (generateJsonCodecs)
 export * from "./contracts.js";
 export { PACKAGE_NAME, checkDocumentVersion } from "./version.js";
+export {
+  bundleCanonicalJson,
+  bundleChecksum,
+  loadBundle,
+  loadDocument,
+  loadManifest,
+  modelChecksum,
+  rubyFloat,
+  RawFloat,
+} from "./lml/index.js";
+export type { LegacyDocument, LoadedDocument } from "./lml/index.js";
+export * from "./values/index.js";
+export { generateModels, generateModelsWith } from "./generator/index.js";
+export type { GenerateOptions } from "./generator/index.js";
+export { createKeyValueEmitter, generateJsonCodecs, jsonEmitter, yamlEmitter } from "./codecs/index.js";
+export type { CodecOptions, KeyValueFormat } from "./codecs/index.js";
+export { canonicalManifestJson, generateArtifacts, sha256Of, staleFiles } from "./artifacts/index.js";
+export type { ArtifactInput, ArtifactSet, StaleReport } from "./artifacts/index.js";

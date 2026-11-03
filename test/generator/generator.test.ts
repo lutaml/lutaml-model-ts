@@ -61,7 +61,9 @@ function tscCheck(dir: string): void {
       lib: ["ES2022"],
       module: "NodeNext",
       moduleResolution: "NodeNext",
-      types: [],
+      // src/index.ts re-exports the node-backed loaders, so the paths mapping pulls node types in.
+      typeRoots: [join(REPO, "node_modules/@types")],
+      types: ["node"],
       strict: true,
       noUncheckedIndexedAccess: true,
       exactOptionalPropertyTypes: true,

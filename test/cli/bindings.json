@@ -1,0 +1,6 @@
+{
+  "types": {
+    "builtin:decimal": { "module": "lutaml-model-ts/exact", "export": "Decimal" },
+    "builtin:rational": { "module": "lutaml-model-ts/exact", "export": "Rational" }
+  }
+}
