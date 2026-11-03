@@ -1,0 +1,112 @@
+{
+  "lml": 2,
+  "model": "LmlExportFixtures::SequencedShape",
+  "register": "default",
+  "attributes": [
+    {
+      "name": "a",
+      "type": {
+        "kind": "builtin",
+        "name": "string"
+      },
+      "required": false,
+      "collection": false,
+      "default": {
+        "present": false
+      },
+      "initialize_empty": false
+    },
+    {
+      "name": "b",
+      "type": {
+        "kind": "builtin",
+        "name": "string"
+      },
+      "required": false,
+      "collection": false,
+      "default": {
+        "present": false
+      },
+      "initialize_empty": false
+    }
+  ],
+  "mappings": {
+    "xml": {
+      "root": {
+        "element": "seq"
+      },
+      "sequence": [
+        {
+          "kind": "sequence",
+          "members": [
+            {
+              "kind": "element",
+              "name": [
+                "a"
+              ],
+              "to": "a",
+              "render": {
+                "nil": "omit",
+                "empty": "omit",
+                "default": false
+              },
+              "namespace": {
+                "mode": "inherit"
+              }
+            },
+            {
+              "kind": "element",
+              "name": [
+                "b"
+              ],
+              "to": "b",
+              "render": {
+                "nil": "omit",
+                "empty": "omit",
+                "default": false
+              },
+              "namespace": {
+                "mode": "inherit"
+              }
+            }
+          ]
+        }
+      ],
+      "rules": [
+        {
+          "kind": "element",
+          "name": [
+            "a"
+          ],
+          "to": "a",
+          "render": {
+            "nil": "omit",
+            "empty": "omit",
+            "default": false
+          },
+          "namespace": {
+            "mode": "inherit"
+          }
+        },
+        {
+          "kind": "element",
+          "name": [
+            "b"
+          ],
+          "to": "b",
+          "render": {
+            "nil": "omit",
+            "empty": "omit",
+            "default": false
+          },
+          "namespace": {
+            "mode": "inherit"
+          }
+        }
+      ],
+      "namespace": {
+        "mode": "inherit"
+      }
+    }
+  }
+}

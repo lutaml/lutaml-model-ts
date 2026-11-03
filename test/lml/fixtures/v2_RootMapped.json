@@ -1,0 +1,82 @@
+{
+  "lml": 2,
+  "model": "LmlExportFixtures::RootMapped",
+  "register": "default",
+  "attributes": [
+    {
+      "name": "fonts",
+      "type": {
+        "kind": "builtin",
+        "name": "string"
+      },
+      "required": false,
+      "collection": {
+        "min": 0,
+        "max": null
+      },
+      "default": {
+        "present": false
+      },
+      "initialize_empty": false
+    }
+  ],
+  "mappings": {
+    "json": {
+      "rules": [
+        {
+          "key": [
+            "root_mapping"
+          ],
+          "to": "fonts",
+          "root_mappings": {
+            "name": "key",
+            "styles": "value"
+          },
+          "render": {
+            "nil": "omit",
+            "empty": "omit",
+            "default": false
+          }
+        }
+      ]
+    },
+    "yaml": {
+      "rules": [
+        {
+          "key": [
+            "root_mapping"
+          ],
+          "to": "fonts",
+          "root_mappings": {
+            "name": "key",
+            "styles": "value"
+          },
+          "render": {
+            "nil": "omit",
+            "empty": "omit",
+            "default": false
+          }
+        }
+      ]
+    },
+    "toml": {
+      "rules": [
+        {
+          "key": [
+            "root_mapping"
+          ],
+          "to": "fonts",
+          "root_mappings": {
+            "name": "key",
+            "styles": "value"
+          },
+          "render": {
+            "nil": "omit",
+            "empty": "omit",
+            "default": false
+          }
+        }
+      ]
+    }
+  }
+}

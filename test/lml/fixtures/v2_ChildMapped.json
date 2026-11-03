@@ -1,0 +1,47 @@
+{
+  "lml": 2,
+  "model": "LmlExportFixtures::ChildMapped",
+  "register": "default",
+  "attributes": [
+    {
+      "name": "schemas",
+      "type": {
+        "kind": "builtin",
+        "name": "string"
+      },
+      "required": false,
+      "collection": {
+        "min": 0,
+        "max": null
+      },
+      "default": {
+        "present": false
+      },
+      "initialize_empty": false
+    }
+  ],
+  "mappings": {
+    "json": {
+      "rules": [
+        {
+          "key": [
+            "schemas"
+          ],
+          "to": "schemas",
+          "child_mappings": {
+            "id": "key",
+            "path": [
+              "path",
+              "link"
+            ]
+          },
+          "render": {
+            "nil": "omit",
+            "empty": "omit",
+            "default": false
+          }
+        }
+      ]
+    }
+  }
+}

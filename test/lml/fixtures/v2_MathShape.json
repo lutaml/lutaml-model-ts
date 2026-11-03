@@ -1,0 +1,86 @@
+{
+  "lml": 2,
+  "model": "LmlExportFixtures::MathShape",
+  "register": "default",
+  "attributes": [
+    {
+      "name": "mi",
+      "type": {
+        "kind": "builtin",
+        "name": "string"
+      },
+      "required": false,
+      "collection": {
+        "min": 0,
+        "max": null
+      },
+      "default": {
+        "present": false
+      },
+      "initialize_empty": false
+    },
+    {
+      "name": "mn",
+      "type": {
+        "kind": "builtin",
+        "name": "string"
+      },
+      "required": false,
+      "collection": {
+        "min": 0,
+        "max": null
+      },
+      "default": {
+        "present": false
+      },
+      "initialize_empty": false
+    }
+  ],
+  "mappings": {
+    "xml": {
+      "root": {
+        "element": "math"
+      },
+      "ordered": true,
+      "rules": [
+        {
+          "kind": "element",
+          "name": [
+            "mi"
+          ],
+          "to": "mi",
+          "render": {
+            "nil": "omit",
+            "empty": "omit",
+            "default": false
+          },
+          "namespace": {
+            "mode": "inherit"
+          }
+        },
+        {
+          "kind": "element",
+          "name": [
+            "mn"
+          ],
+          "to": "mn",
+          "render": {
+            "nil": "omit",
+            "empty": "omit",
+            "default": false
+          },
+          "namespace": {
+            "mode": "inherit"
+          }
+        }
+      ],
+      "namespace": {
+        "mode": "inherit"
+      }
+    }
+  },
+  "ordered_content": {
+    "member": "__lml_content",
+    "version": 1
+  }
+}
