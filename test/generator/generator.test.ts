@@ -356,3 +356,61 @@ describe("generateModelsWith: extension emitters", () => {
     tscCheck(dir);
   });
 });
+
+describe("rule-level discriminator (Ruby export shape)", () => {
+  const rubyBundle = JSON.parse(readFileSync(join(REPO, "test/json/fixtures/oracle.json"), "utf8")).bundle as Bundle;
+  const attrs = (b: Bundle): { discriminator?: unknown }[] =>
+    (b.models["OracleModels::Kennel@default"] as ModelDocument).attributes as unknown as { discriminator?: unknown }[];
+
+  it("fixture is rule-level only: no attribute carries a discriminator", () => {
+    expect(attrs(rubyBundle).some((a) => a.discriminator !== undefined)).toBe(false);
+  });
+
+  it("accepts Dog where Animal is declared and compiles strictly", { timeout: 180_000 }, () => {
+    const { dir, files } = generateInto(rubyBundle, NO_BINDINGS);
+    const models = files.get("models.ts") ?? "";
+    expect(models).toMatch(/OracleModelsAnimal \| OracleModelsDog|OracleModelsDog \| OracleModelsAnimal/);
+    writeFileSync(
+      join(dir, "use.ts"),
+      [
+        'import { OracleModelsKennel, OracleModelsDog, OracleModelsAnimal } from "./models.js";',
+        "const dog = new OracleModelsDog({ name: 'rex' } as never);",
+        "const animal = new OracleModelsAnimal({ name: 'tom' } as never);",
+        "export const pet: OracleModelsKennel['pet'] = dog;",
+        "export const other: OracleModelsKennel['pet'] = animal;",
+        "",
+      ].join("\n"),
+    );
+    tscCheck(dir);
+  });
+
+  it("control: unrelated classes stay rejected under the same check", { timeout: 180_000 }, () => {
+    const { dir } = generateInto(rubyBundle, NO_BINDINGS);
+    writeFileSync(
+      join(dir, "use.ts"),
+      'import { OracleModelsKennel, OracleModelsTag } from "./models.js";\nexport const bad: OracleModelsKennel["pet"] = new OracleModelsTag({} as never);\n',
+    );
+    expect(() => tscCheck(dir)).toThrow(/TS2322/);
+  });
+
+  it("refuses an attribute whose rule disagrees with its attribute-level discriminator, by name", () => {
+    const bad = mutate(rubyBundle as never, (d) => {
+      const kennel = d.models["OracleModels::Kennel@default"] as never as { attributes: { name: string; discriminator?: unknown }[] };
+      const pet = kennel.attributes.find((a) => a.name === "pet") as { discriminator?: unknown };
+      pet.discriminator = { attribute: "kind", cases: { dog: "OracleModels::Dog@default" } };
+    });
+    expect(() => generateModels(bad, NO_BINDINGS)).toThrow(/pet|disagrees/);
+    expect(codeOf(() => generateModels(bad, NO_BINDINGS))).toBe("unsupported_mapping");
+  });
+
+  it("refuses two formats that disagree", () => {
+    const bad = mutate(rubyBundle as never, (d) => {
+      const kennel = d.models["OracleModels::Kennel@default"] as never as { mappings: Record<string, unknown> };
+      const other = structuredClone(kennel.mappings["json"]) as { rules: { to: string; discriminator?: { cases: Record<string, string> } }[] };
+      const rule = other.rules.find((r) => r.to === "pet");
+      delete (rule?.discriminator?.cases as Record<string, string>)["animal"];
+      kennel.mappings["yaml"] = other;
+    });
+    expect(codeOf(() => generateModels(bad, NO_BINDINGS))).toBe("unsupported_mapping");
+  });
+});
