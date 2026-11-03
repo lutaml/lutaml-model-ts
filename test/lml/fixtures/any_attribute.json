@@ -1,0 +1,326 @@
+[
+  {
+    "name": "valid_last",
+    "kind": "document",
+    "input": "{\"lml\":2,\"model\":\"A\",\"register\":\"default\",\"attributes\":[{\"name\":\"id\",\"type\":{\"kind\":\"builtin\",\"name\":\"string\"}},{\"name\":\"other\",\"type\":{\"kind\":\"builtin\",\"name\":\"hash\"}}],\"mappings\":{\"xml\":{\"rules\":[{\"kind\":\"attribute\",\"name\":[\"id\"],\"to\":\"id\"},{\"kind\":\"any_attribute\",\"to\":\"other\"}]}}}",
+    "expect": null
+  },
+  {
+    "name": "valid_only",
+    "kind": "document",
+    "input": "{\"lml\":2,\"model\":\"A\",\"register\":\"default\",\"attributes\":[{\"name\":\"id\",\"type\":{\"kind\":\"builtin\",\"name\":\"string\"}},{\"name\":\"other\",\"type\":{\"kind\":\"builtin\",\"name\":\"hash\"}}],\"mappings\":{\"xml\":{\"rules\":[{\"kind\":\"any_attribute\",\"to\":\"other\"}]}}}",
+    "expect": null
+  },
+  {
+    "name": "valid_not_last",
+    "kind": "document",
+    "input": "{\"lml\":2,\"model\":\"A\",\"register\":\"default\",\"attributes\":[{\"name\":\"id\",\"type\":{\"kind\":\"builtin\",\"name\":\"string\"}},{\"name\":\"other\",\"type\":{\"kind\":\"builtin\",\"name\":\"hash\"}}],\"mappings\":{\"xml\":{\"rules\":[{\"kind\":\"any_attribute\",\"to\":\"other\"},{\"kind\":\"attribute\",\"name\":[\"id\"],\"to\":\"id\"}]}}}",
+    "expect": null
+  },
+  {
+    "name": "valid_with_json_mapping",
+    "kind": "document",
+    "input": "{\"lml\":2,\"model\":\"A\",\"register\":\"default\",\"attributes\":[{\"name\":\"id\",\"type\":{\"kind\":\"builtin\",\"name\":\"string\"}},{\"name\":\"other\",\"type\":{\"kind\":\"builtin\",\"name\":\"hash\"}}],\"mappings\":{\"xml\":{\"rules\":[{\"kind\":\"attribute\",\"name\":[\"id\"],\"to\":\"id\"},{\"kind\":\"any_attribute\",\"to\":\"other\"}]},\"json\":{\"rules\":[{\"kind\":\"element\",\"name\":[\"id\"],\"to\":\"id\"}]}}}",
+    "expect": null
+  },
+  {
+    "name": "duplicate",
+    "kind": "document",
+    "input": "{\"lml\":2,\"model\":\"A\",\"register\":\"default\",\"attributes\":[{\"name\":\"id\",\"type\":{\"kind\":\"builtin\",\"name\":\"string\"}},{\"name\":\"other\",\"type\":{\"kind\":\"builtin\",\"name\":\"hash\"}}],\"mappings\":{\"xml\":{\"rules\":[{\"kind\":\"attribute\",\"name\":[\"id\"],\"to\":\"id\"},{\"kind\":\"any_attribute\",\"to\":\"other\"},{\"kind\":\"any_attribute\",\"to\":\"other\"}]}}}",
+    "expect": {
+      "reason": "unsupported_mapping",
+      "location": "/mappings/xml/rules/2",
+      "detail": "at most one any_attribute rule per mapping"
+    }
+  },
+  {
+    "name": "duplicate_other_target",
+    "kind": "document",
+    "input": "{\"lml\":2,\"model\":\"A\",\"register\":\"default\",\"attributes\":[{\"name\":\"id\",\"type\":{\"kind\":\"builtin\",\"name\":\"string\"}},{\"name\":\"other\",\"type\":{\"kind\":\"builtin\",\"name\":\"hash\"}}],\"mappings\":{\"xml\":{\"rules\":[{\"kind\":\"any_attribute\",\"to\":\"other\"},{\"kind\":\"any_attribute\",\"to\":\"id\"}]}}}",
+    "expect": {
+      "reason": "unsupported_mapping",
+      "location": "/mappings/xml/rules/1",
+      "detail": "at most one any_attribute rule per mapping"
+    }
+  },
+  {
+    "name": "extra_key_name",
+    "kind": "document",
+    "input": "{\"lml\":2,\"model\":\"A\",\"register\":\"default\",\"attributes\":[{\"name\":\"id\",\"type\":{\"kind\":\"builtin\",\"name\":\"string\"}},{\"name\":\"other\",\"type\":{\"kind\":\"builtin\",\"name\":\"hash\"}}],\"mappings\":{\"xml\":{\"rules\":[{\"kind\":\"any_attribute\",\"to\":\"other\",\"name\":[\"x\"]}]}}}",
+    "expect": {
+      "reason": "unsupported_mapping",
+      "location": "/mappings/xml/rules/0/name",
+      "detail": "unknown key name"
+    }
+  },
+  {
+    "name": "extra_key_namespace",
+    "kind": "document",
+    "input": "{\"lml\":2,\"model\":\"A\",\"register\":\"default\",\"attributes\":[{\"name\":\"id\",\"type\":{\"kind\":\"builtin\",\"name\":\"string\"}},{\"name\":\"other\",\"type\":{\"kind\":\"builtin\",\"name\":\"hash\"}}],\"mappings\":{\"xml\":{\"rules\":[{\"kind\":\"any_attribute\",\"to\":\"other\",\"namespace\":{\"mode\":\"inherit\"}}]}}}",
+    "expect": {
+      "reason": "unsupported_mapping",
+      "location": "/mappings/xml/rules/0/namespace",
+      "detail": "unknown key namespace"
+    }
+  },
+  {
+    "name": "extra_key_cdata",
+    "kind": "document",
+    "input": "{\"lml\":2,\"model\":\"A\",\"register\":\"default\",\"attributes\":[{\"name\":\"id\",\"type\":{\"kind\":\"builtin\",\"name\":\"string\"}},{\"name\":\"other\",\"type\":{\"kind\":\"builtin\",\"name\":\"hash\"}}],\"mappings\":{\"xml\":{\"rules\":[{\"kind\":\"any_attribute\",\"to\":\"other\",\"cdata\":true}]}}}",
+    "expect": {
+      "reason": "unsupported_mapping",
+      "location": "/mappings/xml/rules/0/cdata",
+      "detail": "unknown key cdata"
+    }
+  },
+  {
+    "name": "extra_key_render",
+    "kind": "document",
+    "input": "{\"lml\":2,\"model\":\"A\",\"register\":\"default\",\"attributes\":[{\"name\":\"id\",\"type\":{\"kind\":\"builtin\",\"name\":\"string\"}},{\"name\":\"other\",\"type\":{\"kind\":\"builtin\",\"name\":\"hash\"}}],\"mappings\":{\"xml\":{\"rules\":[{\"kind\":\"any_attribute\",\"to\":\"other\",\"render\":{\"nil\":true}}]}}}",
+    "expect": {
+      "reason": "unsupported_mapping",
+      "location": "/mappings/xml/rules/0/render",
+      "detail": "unknown key render"
+    }
+  },
+  {
+    "name": "extra_key_unknown",
+    "kind": "document",
+    "input": "{\"lml\":2,\"model\":\"A\",\"register\":\"default\",\"attributes\":[{\"name\":\"id\",\"type\":{\"kind\":\"builtin\",\"name\":\"string\"}},{\"name\":\"other\",\"type\":{\"kind\":\"builtin\",\"name\":\"hash\"}}],\"mappings\":{\"xml\":{\"rules\":[{\"kind\":\"any_attribute\",\"to\":\"other\",\"bogus\":1}]}}}",
+    "expect": {
+      "reason": "unsupported_mapping",
+      "location": "/mappings/xml/rules/0/bogus",
+      "detail": "unknown key bogus"
+    }
+  },
+  {
+    "name": "extra_key_executable",
+    "kind": "document",
+    "input": "{\"lml\":2,\"model\":\"A\",\"register\":\"default\",\"attributes\":[{\"name\":\"id\",\"type\":{\"kind\":\"builtin\",\"name\":\"string\"}},{\"name\":\"other\",\"type\":{\"kind\":\"builtin\",\"name\":\"hash\"}}],\"mappings\":{\"xml\":{\"rules\":[{\"kind\":\"any_attribute\",\"to\":\"other\",\"with\":\"x\"}]}}}",
+    "expect": {
+      "reason": "unsupported_mapping",
+      "location": "/mappings/xml/rules/0/with",
+      "detail": "executable rule key with"
+    }
+  },
+  {
+    "name": "missing_to",
+    "kind": "document",
+    "input": "{\"lml\":2,\"model\":\"A\",\"register\":\"default\",\"attributes\":[{\"name\":\"id\",\"type\":{\"kind\":\"builtin\",\"name\":\"string\"}},{\"name\":\"other\",\"type\":{\"kind\":\"builtin\",\"name\":\"hash\"}}],\"mappings\":{\"xml\":{\"rules\":[{\"kind\":\"any_attribute\"}]}}}",
+    "expect": {
+      "reason": "invalid_document",
+      "location": "/mappings/xml/rules/0/to",
+      "detail": "expected a non-empty string"
+    }
+  },
+  {
+    "name": "to_null",
+    "kind": "document",
+    "input": "{\"lml\":2,\"model\":\"A\",\"register\":\"default\",\"attributes\":[{\"name\":\"id\",\"type\":{\"kind\":\"builtin\",\"name\":\"string\"}},{\"name\":\"other\",\"type\":{\"kind\":\"builtin\",\"name\":\"hash\"}}],\"mappings\":{\"xml\":{\"rules\":[{\"kind\":\"any_attribute\",\"to\":null}]}}}",
+    "expect": {
+      "reason": "invalid_document",
+      "location": "/mappings/xml/rules/0/to",
+      "detail": "expected a non-empty string"
+    }
+  },
+  {
+    "name": "to_number",
+    "kind": "document",
+    "input": "{\"lml\":2,\"model\":\"A\",\"register\":\"default\",\"attributes\":[{\"name\":\"id\",\"type\":{\"kind\":\"builtin\",\"name\":\"string\"}},{\"name\":\"other\",\"type\":{\"kind\":\"builtin\",\"name\":\"hash\"}}],\"mappings\":{\"xml\":{\"rules\":[{\"kind\":\"any_attribute\",\"to\":5}]}}}",
+    "expect": {
+      "reason": "invalid_document",
+      "location": "/mappings/xml/rules/0/to",
+      "detail": "expected a non-empty string"
+    }
+  },
+  {
+    "name": "to_array",
+    "kind": "document",
+    "input": "{\"lml\":2,\"model\":\"A\",\"register\":\"default\",\"attributes\":[{\"name\":\"id\",\"type\":{\"kind\":\"builtin\",\"name\":\"string\"}},{\"name\":\"other\",\"type\":{\"kind\":\"builtin\",\"name\":\"hash\"}}],\"mappings\":{\"xml\":{\"rules\":[{\"kind\":\"any_attribute\",\"to\":[\"other\"]}]}}}",
+    "expect": {
+      "reason": "invalid_document",
+      "location": "/mappings/xml/rules/0/to",
+      "detail": "expected a non-empty string"
+    }
+  },
+  {
+    "name": "to_undeclared",
+    "kind": "document",
+    "input": "{\"lml\":2,\"model\":\"A\",\"register\":\"default\",\"attributes\":[{\"name\":\"id\",\"type\":{\"kind\":\"builtin\",\"name\":\"string\"}},{\"name\":\"other\",\"type\":{\"kind\":\"builtin\",\"name\":\"hash\"}}],\"mappings\":{\"xml\":{\"rules\":[{\"kind\":\"any_attribute\",\"to\":\"nope\"}]}}}",
+    "expect": {
+      "reason": "dangling_reference",
+      "location": "/mappings/xml/rules/0/to",
+      "detail": "any_attribute `to` \"nope\" is not an attribute of the model"
+    }
+  },
+  {
+    "name": "to_string_attr",
+    "kind": "document",
+    "input": "{\"lml\":2,\"model\":\"A\",\"register\":\"default\",\"attributes\":[{\"name\":\"id\",\"type\":{\"kind\":\"builtin\",\"name\":\"string\"}},{\"name\":\"other\",\"type\":{\"kind\":\"builtin\",\"name\":\"hash\"}}],\"mappings\":{\"xml\":{\"rules\":[{\"kind\":\"any_attribute\",\"to\":\"id\"}]}}}",
+    "expect": {
+      "reason": "unsupported_mapping",
+      "location": "/mappings/xml/rules/0/to",
+      "detail": "any_attribute `to` \"id\" must be a non-collection hash attribute"
+    }
+  },
+  {
+    "name": "to_collection_hash",
+    "kind": "document",
+    "input": "{\"lml\":2,\"model\":\"A\",\"register\":\"default\",\"attributes\":[{\"name\":\"other\",\"type\":{\"kind\":\"builtin\",\"name\":\"hash\"},\"collection\":{\"min\":0,\"max\":null}}],\"mappings\":{\"xml\":{\"rules\":[{\"kind\":\"any_attribute\",\"to\":\"other\"}]}}}",
+    "expect": {
+      "reason": "unsupported_mapping",
+      "location": "/mappings/xml/rules/0/to",
+      "detail": "any_attribute `to` \"other\" must be a non-collection hash attribute"
+    }
+  },
+  {
+    "name": "to_collection_false_hash",
+    "kind": "document",
+    "input": "{\"lml\":2,\"model\":\"A\",\"register\":\"default\",\"attributes\":[{\"name\":\"other\",\"type\":{\"kind\":\"builtin\",\"name\":\"hash\"},\"collection\":false}],\"mappings\":{\"xml\":{\"rules\":[{\"kind\":\"any_attribute\",\"to\":\"other\"}]}}}",
+    "expect": null
+  },
+  {
+    "name": "to_model_typed",
+    "kind": "document",
+    "input": "{\"lml\":2,\"model\":\"A\",\"register\":\"default\",\"attributes\":[{\"name\":\"other\",\"type\":{\"kind\":\"model\",\"id\":\"A@default\"}}],\"mappings\":{\"xml\":{\"rules\":[{\"kind\":\"any_attribute\",\"to\":\"other\"}]}}}",
+    "expect": {
+      "reason": "unsupported_mapping",
+      "location": "/mappings/xml/rules/0/to",
+      "detail": "any_attribute `to` \"other\" must be a non-collection hash attribute"
+    }
+  },
+  {
+    "name": "to_value_typed",
+    "kind": "document",
+    "input": "{\"lml\":2,\"model\":\"A\",\"register\":\"default\",\"attributes\":[{\"name\":\"other\",\"type\":{\"kind\":\"value\",\"id\":\"V@default\"}}],\"mappings\":{\"xml\":{\"rules\":[{\"kind\":\"any_attribute\",\"to\":\"other\"}]}}}",
+    "expect": {
+      "reason": "unsupported_mapping",
+      "location": "/mappings/xml/rules/0/to",
+      "detail": "any_attribute `to` \"other\" must be a non-collection hash attribute"
+    }
+  },
+  {
+    "name": "json_mapping",
+    "kind": "document",
+    "input": "{\"lml\":2,\"model\":\"A\",\"register\":\"default\",\"attributes\":[{\"name\":\"id\",\"type\":{\"kind\":\"builtin\",\"name\":\"string\"}},{\"name\":\"other\",\"type\":{\"kind\":\"builtin\",\"name\":\"hash\"}}],\"mappings\":{\"json\":{\"rules\":[{\"kind\":\"any_attribute\",\"to\":\"other\"}]}}}",
+    "expect": {
+      "reason": "unsupported_mapping",
+      "location": "/mappings/json/rules/0",
+      "detail": "any_attribute is xml only"
+    }
+  },
+  {
+    "name": "yaml_mapping",
+    "kind": "document",
+    "input": "{\"lml\":2,\"model\":\"A\",\"register\":\"default\",\"attributes\":[{\"name\":\"id\",\"type\":{\"kind\":\"builtin\",\"name\":\"string\"}},{\"name\":\"other\",\"type\":{\"kind\":\"builtin\",\"name\":\"hash\"}}],\"mappings\":{\"yaml\":{\"rules\":[{\"kind\":\"any_attribute\",\"to\":\"other\"}]}}}",
+    "expect": {
+      "reason": "unsupported_mapping",
+      "location": "/mappings/yaml/rules/0",
+      "detail": "any_attribute is xml only"
+    }
+  },
+  {
+    "name": "toml_mapping",
+    "kind": "document",
+    "input": "{\"lml\":2,\"model\":\"A\",\"register\":\"default\",\"attributes\":[{\"name\":\"id\",\"type\":{\"kind\":\"builtin\",\"name\":\"string\"}},{\"name\":\"other\",\"type\":{\"kind\":\"builtin\",\"name\":\"hash\"}}],\"mappings\":{\"toml\":{\"rules\":[{\"kind\":\"any_attribute\",\"to\":\"other\"}]}}}",
+    "expect": {
+      "reason": "unsupported_mapping",
+      "location": "/mappings/toml/rules/0",
+      "detail": "any_attribute is xml only"
+    }
+  },
+  {
+    "name": "json_mapping_extra_key",
+    "kind": "document",
+    "input": "{\"lml\":2,\"model\":\"A\",\"register\":\"default\",\"attributes\":[{\"name\":\"id\",\"type\":{\"kind\":\"builtin\",\"name\":\"string\"}},{\"name\":\"other\",\"type\":{\"kind\":\"builtin\",\"name\":\"hash\"}}],\"mappings\":{\"json\":{\"rules\":[{\"kind\":\"any_attribute\",\"to\":\"other\",\"name\":[\"x\"]}]}}}",
+    "expect": {
+      "reason": "unsupported_mapping",
+      "location": "/mappings/json/rules/0",
+      "detail": "any_attribute is xml only"
+    }
+  },
+  {
+    "name": "json_and_xml",
+    "kind": "document",
+    "input": "{\"lml\":2,\"model\":\"A\",\"register\":\"default\",\"attributes\":[{\"name\":\"id\",\"type\":{\"kind\":\"builtin\",\"name\":\"string\"}},{\"name\":\"other\",\"type\":{\"kind\":\"builtin\",\"name\":\"hash\"}}],\"mappings\":{\"json\":{\"rules\":[{\"kind\":\"any_attribute\",\"to\":\"other\"}]},\"xml\":{\"rules\":[{\"kind\":\"any_attribute\",\"to\":\"other\"}]}}}",
+    "expect": {
+      "reason": "unsupported_mapping",
+      "location": "/mappings/json/rules/0",
+      "detail": "any_attribute is xml only"
+    }
+  },
+  {
+    "name": "in_sequence_compositor",
+    "kind": "document",
+    "input": "{\"lml\":2,\"model\":\"A\",\"register\":\"default\",\"attributes\":[{\"name\":\"id\",\"type\":{\"kind\":\"builtin\",\"name\":\"string\"}},{\"name\":\"other\",\"type\":{\"kind\":\"builtin\",\"name\":\"hash\"}}],\"mappings\":{\"xml\":{\"rules\":[{\"kind\":\"sequence\",\"members\":[{\"kind\":\"any_attribute\",\"to\":\"other\"}]}]}}}",
+    "expect": null
+  },
+  {
+    "name": "in_choice_compositor",
+    "kind": "document",
+    "input": "{\"lml\":2,\"model\":\"A\",\"register\":\"default\",\"attributes\":[{\"name\":\"id\",\"type\":{\"kind\":\"builtin\",\"name\":\"string\"}},{\"name\":\"other\",\"type\":{\"kind\":\"builtin\",\"name\":\"hash\"}}],\"mappings\":{\"xml\":{\"rules\":[{\"kind\":\"choice\",\"members\":[{\"kind\":\"attribute\",\"name\":[\"id\"],\"to\":\"id\"},{\"kind\":\"any_attribute\",\"to\":\"other\"}]}]}}}",
+    "expect": null
+  },
+  {
+    "name": "in_nested_compositor",
+    "kind": "document",
+    "input": "{\"lml\":2,\"model\":\"A\",\"register\":\"default\",\"attributes\":[{\"name\":\"id\",\"type\":{\"kind\":\"builtin\",\"name\":\"string\"}},{\"name\":\"other\",\"type\":{\"kind\":\"builtin\",\"name\":\"hash\"}}],\"mappings\":{\"xml\":{\"rules\":[{\"kind\":\"sequence\",\"members\":[{\"kind\":\"choice\",\"members\":[{\"kind\":\"any_attribute\",\"to\":\"other\"}]}]}]}}}",
+    "expect": null
+  },
+  {
+    "name": "in_mapping_sequence",
+    "kind": "document",
+    "input": "{\"lml\":2,\"model\":\"A\",\"register\":\"default\",\"attributes\":[{\"name\":\"id\",\"type\":{\"kind\":\"builtin\",\"name\":\"string\"}},{\"name\":\"other\",\"type\":{\"kind\":\"builtin\",\"name\":\"hash\"}}],\"mappings\":{\"xml\":{\"sequence\":[{\"kind\":\"sequence\",\"members\":[{\"kind\":\"any_attribute\",\"to\":\"other\"}]}]}}}",
+    "expect": {
+      "reason": "unsupported_mapping",
+      "location": "/mappings/xml/sequence/0/members/0/kind",
+      "detail": "any_attribute is not allowed inside a compositor"
+    }
+  },
+  {
+    "name": "mapping_sequence_toplevel_any",
+    "kind": "document",
+    "input": "{\"lml\":2,\"model\":\"A\",\"register\":\"default\",\"attributes\":[{\"name\":\"id\",\"type\":{\"kind\":\"builtin\",\"name\":\"string\"}},{\"name\":\"other\",\"type\":{\"kind\":\"builtin\",\"name\":\"hash\"}}],\"mappings\":{\"xml\":{\"sequence\":[{\"kind\":\"any_attribute\",\"to\":\"other\"}]}}}",
+    "expect": {
+      "reason": "unsupported_mapping",
+      "location": "/mappings/xml/sequence/0/kind",
+      "detail": "expected a sequence or choice"
+    }
+  },
+  {
+    "name": "xml_any_next_to_compositor",
+    "kind": "document",
+    "input": "{\"lml\":2,\"model\":\"A\",\"register\":\"default\",\"attributes\":[{\"name\":\"id\",\"type\":{\"kind\":\"builtin\",\"name\":\"string\"}},{\"name\":\"other\",\"type\":{\"kind\":\"builtin\",\"name\":\"hash\"}}],\"mappings\":{\"xml\":{\"rules\":[{\"kind\":\"sequence\",\"members\":[{\"kind\":\"attribute\",\"name\":[\"id\"],\"to\":\"id\"}]},{\"kind\":\"any_attribute\",\"to\":\"other\"}]}}}",
+    "expect": null
+  },
+  {
+    "name": "rule_not_object",
+    "kind": "document",
+    "input": "{\"lml\":2,\"model\":\"A\",\"register\":\"default\",\"attributes\":[{\"name\":\"id\",\"type\":{\"kind\":\"builtin\",\"name\":\"string\"}},{\"name\":\"other\",\"type\":{\"kind\":\"builtin\",\"name\":\"hash\"}}],\"mappings\":{\"xml\":{\"rules\":[{\"kind\":\"any_attribute\",\"to\":\"other\"},\"x\"]}}}",
+    "expect": {
+      "reason": "invalid_document",
+      "location": "/mappings/xml/rules/1",
+      "detail": "expected an object"
+    }
+  },
+  {
+    "name": "no_attributes_dangling",
+    "kind": "document",
+    "input": "{\"lml\":2,\"model\":\"A\",\"register\":\"default\",\"attributes\":[],\"mappings\":{\"xml\":{\"rules\":[{\"kind\":\"any_attribute\",\"to\":\"other\"}]}}}",
+    "expect": {
+      "reason": "dangling_reference",
+      "location": "/mappings/xml/rules/0/to",
+      "detail": "any_attribute `to` \"other\" is not an attribute of the model"
+    }
+  },
+  {
+    "name": "unsupported_kind_still_refused",
+    "kind": "document",
+    "input": "{\"lml\":2,\"model\":\"A\",\"register\":\"default\",\"attributes\":[{\"name\":\"id\",\"type\":{\"kind\":\"builtin\",\"name\":\"string\"}},{\"name\":\"other\",\"type\":{\"kind\":\"builtin\",\"name\":\"hash\"}}],\"mappings\":{\"xml\":{\"rules\":[{\"kind\":\"anyAttribute\",\"to\":\"other\"}]}}}",
+    "expect": {
+      "reason": "unsupported_mapping",
+      "location": "/mappings/xml/rules/0/kind",
+      "detail": "rule kind \"anyAttribute\""
+    }
+  }
+]
