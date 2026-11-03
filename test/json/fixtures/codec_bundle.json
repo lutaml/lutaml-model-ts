@@ -1,0 +1,456 @@
+{
+  "lml_bundle": 1,
+  "roots": [
+    "Codec::Order@default"
+  ],
+  "models": {
+    "Codec::Order@default": {
+      "lml": 2,
+      "model": "Codec::Order",
+      "register": "default",
+      "attributes": [
+        {
+          "name": "id",
+          "type": {
+            "kind": "builtin",
+            "name": "string"
+          },
+          "required": true,
+          "collection": false,
+          "default": {
+            "present": false
+          },
+          "initialize_empty": false
+        },
+        {
+          "name": "qty",
+          "type": {
+            "kind": "builtin",
+            "name": "integer"
+          },
+          "required": false,
+          "collection": false,
+          "default": {
+            "present": false
+          },
+          "initialize_empty": false
+        },
+        {
+          "name": "big",
+          "type": {
+            "kind": "builtin",
+            "name": "integer"
+          },
+          "required": false,
+          "collection": false,
+          "default": {
+            "present": false
+          },
+          "initialize_empty": false
+        },
+        {
+          "name": "price",
+          "type": {
+            "kind": "builtin",
+            "name": "decimal"
+          },
+          "required": false,
+          "collection": false,
+          "default": {
+            "present": false
+          },
+          "initialize_empty": false
+        },
+        {
+          "name": "ratio",
+          "type": {
+            "kind": "builtin",
+            "name": "rational"
+          },
+          "required": false,
+          "collection": false,
+          "default": {
+            "present": false
+          },
+          "initialize_empty": false
+        },
+        {
+          "name": "blob",
+          "type": {
+            "kind": "builtin",
+            "name": "base64_binary"
+          },
+          "required": false,
+          "collection": false,
+          "default": {
+            "present": false
+          },
+          "initialize_empty": false
+        },
+        {
+          "name": "raw",
+          "type": {
+            "kind": "builtin",
+            "name": "hex_binary"
+          },
+          "required": false,
+          "collection": false,
+          "default": {
+            "present": false
+          },
+          "initialize_empty": false
+        },
+        {
+          "name": "qn",
+          "type": {
+            "kind": "builtin",
+            "name": "qname"
+          },
+          "required": false,
+          "collection": false,
+          "default": {
+            "present": false
+          },
+          "initialize_empty": false
+        },
+        {
+          "name": "when",
+          "type": {
+            "kind": "builtin",
+            "name": "date"
+          },
+          "required": false,
+          "collection": false,
+          "default": {
+            "present": false
+          },
+          "initialize_empty": false
+        },
+        {
+          "name": "extras",
+          "type": {
+            "kind": "builtin",
+            "name": "hash"
+          },
+          "required": false,
+          "collection": false,
+          "default": {
+            "present": false
+          },
+          "initialize_empty": false
+        },
+        {
+          "name": "currency",
+          "type": {
+            "kind": "builtin",
+            "name": "string"
+          },
+          "required": false,
+          "collection": false,
+          "default": {
+            "present": true,
+            "value": "USD"
+          },
+          "initialize_empty": false
+        },
+        {
+          "name": "code",
+          "type": {
+            "kind": "value",
+            "id": "code"
+          },
+          "required": false,
+          "collection": false,
+          "default": {
+            "present": false
+          },
+          "initialize_empty": false
+        },
+        {
+          "name": "lines",
+          "type": {
+            "kind": "model",
+            "id": "Codec::Line@default"
+          },
+          "required": false,
+          "collection": {
+            "min": 0,
+            "max": null
+          },
+          "default": {
+            "present": false
+          },
+          "initialize_empty": false
+        },
+        {
+          "name": "open",
+          "type": {
+            "kind": "builtin",
+            "name": "boolean"
+          },
+          "required": false,
+          "collection": false,
+          "default": {
+            "present": false
+          },
+          "initialize_empty": false
+        }
+      ],
+      "mappings": {
+        "json": {
+          "rules": [
+            {
+              "key": [
+                "order_id"
+              ],
+              "to": "id",
+              "render": {
+                "nil": "omit",
+                "empty": "omit",
+                "default": false
+              }
+            },
+            {
+              "key": [
+                "qty"
+              ],
+              "to": "qty",
+              "render": {
+                "nil": "omit",
+                "empty": "omit",
+                "default": false
+              }
+            },
+            {
+              "key": [
+                "big"
+              ],
+              "to": "big",
+              "render": {
+                "nil": "omit",
+                "empty": "omit",
+                "default": false
+              }
+            },
+            {
+              "key": [
+                "price"
+              ],
+              "to": "price",
+              "render": {
+                "nil": "as_nil",
+                "empty": "omit",
+                "default": false
+              }
+            },
+            {
+              "key": [
+                "ratio"
+              ],
+              "to": "ratio",
+              "render": {
+                "nil": "omit",
+                "empty": "omit",
+                "default": false
+              }
+            },
+            {
+              "key": [
+                "blob"
+              ],
+              "to": "blob",
+              "render": {
+                "nil": "omit",
+                "empty": "omit",
+                "default": false
+              }
+            },
+            {
+              "key": [
+                "raw"
+              ],
+              "to": "raw",
+              "render": {
+                "nil": "omit",
+                "empty": "omit",
+                "default": false
+              }
+            },
+            {
+              "key": [
+                "qn"
+              ],
+              "to": "qn",
+              "render": {
+                "nil": "omit",
+                "empty": "omit",
+                "default": false
+              }
+            },
+            {
+              "key": [
+                "when",
+                "at"
+              ],
+              "to": "when",
+              "render": {
+                "nil": "omit",
+                "empty": "omit",
+                "default": false
+              }
+            },
+            {
+              "key": [
+                "extras"
+              ],
+              "to": "extras",
+              "render": {
+                "nil": "omit",
+                "empty": "omit",
+                "default": false
+              }
+            },
+            {
+              "key": [
+                "currency"
+              ],
+              "to": "currency",
+              "render": {
+                "nil": "omit",
+                "empty": "omit",
+                "default": false
+              }
+            },
+            {
+              "key": [
+                "code"
+              ],
+              "to": "code",
+              "render": {
+                "nil": "omit",
+                "empty": "omit",
+                "default": false
+              }
+            },
+            {
+              "key": [
+                "lines"
+              ],
+              "to": "lines",
+              "render": {
+                "nil": "omit",
+                "empty": "omit",
+                "default": false
+              }
+            },
+            {
+              "key": [
+                "open"
+              ],
+              "to": "open",
+              "render": {
+                "nil": "omit",
+                "empty": "omit",
+                "default": false
+              }
+            }
+          ]
+        }
+      }
+    },
+    "Codec::Line@default": {
+      "lml": 2,
+      "model": "Codec::Line",
+      "register": "default",
+      "attributes": [
+        {
+          "name": "sku",
+          "type": {
+            "kind": "builtin",
+            "name": "string"
+          },
+          "required": true,
+          "collection": false,
+          "default": {
+            "present": false
+          },
+          "initialize_empty": false
+        },
+        {
+          "name": "units",
+          "type": {
+            "kind": "builtin",
+            "name": "integer"
+          },
+          "required": false,
+          "collection": false,
+          "default": {
+            "present": true,
+            "value": 1
+          },
+          "initialize_empty": false
+        }
+      ],
+      "mappings": {
+        "json": {
+          "rules": [
+            {
+              "key": [
+                "sku"
+              ],
+              "to": "sku",
+              "render": {
+                "nil": "omit",
+                "empty": "omit",
+                "default": false
+              }
+            },
+            {
+              "key": [
+                "units"
+              ],
+              "to": "units",
+              "render": {
+                "nil": "omit",
+                "empty": "omit",
+                "default": false
+              }
+            }
+          ]
+        }
+      }
+    },
+    "Codec::Plain@default": {
+      "lml": 2,
+      "model": "Codec::Plain",
+      "register": "default",
+      "attributes": [
+        {
+          "name": "x",
+          "type": {
+            "kind": "builtin",
+            "name": "string"
+          },
+          "required": false,
+          "collection": false,
+          "default": {
+            "present": false
+          },
+          "initialize_empty": false
+        }
+      ],
+      "mappings": {}
+    }
+  },
+  "value_types": {
+    "code": {
+      "base": "string",
+      "facets": {
+        "pattern": "[A-Z]{3}[0-9]+"
+      }
+    }
+  },
+  "capabilities": [
+    "json"
+  ]
+}
