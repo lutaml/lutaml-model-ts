@@ -15,6 +15,7 @@ import type {
   TypeBinding,
 } from "../contracts.js";
 import { access, targetClassName } from "../generator/names.js";
+import { effectiveDiscriminator } from "../generator/plan.js";
 import { codecRuntimeSource } from "./runtime-source.js";
 
 export { codecRuntimeSource } from "./runtime-source.js";
@@ -198,14 +199,10 @@ function elementWire(ctx: Context, attr: AttributeSpec, disc: Discriminator | un
   return { dec: `decode${cls}`, enc: `encode${cls}`, shape: "scalar" };
 }
 
-function attributeWire(ctx: Context, attr: AttributeSpec, rule: KeyValueRule, refuse: Refusal): Wire {
-  const ruleDisc = (rule as KeyValueRule & { readonly discriminator?: Discriminator }).discriminator;
-  if (ruleDisc !== undefined && JSON.stringify(ruleDisc) !== JSON.stringify(attr.discriminator)) {
-    // The generated model class only holds the case classes its attribute-level
-    // discriminator names, so a rule-level one alone would build unusable values.
-    refuse.unsupported("rule-level discriminator needs an identical attribute-level discriminator", attr.name);
-  }
-  const element = elementWire(ctx, attr, ruleDisc ?? attr.discriminator, refuse);
+function attributeWire(ctx: Context, doc: ModelDocument, id: ModelId, attr: AttributeSpec, refuse: Refusal): Wire {
+  // One source of truth with the model generator: attribute-level and every
+  // format's rule-level discriminator must agree, or generation refuses.
+  const element = elementWire(ctx, attr, effectiveDiscriminator(doc, attr, id), refuse);
   const collection = (attr as Partial<AttributeSpec>).collection ?? false;
   if (collection === false) return element;
   return { dec: `w.dList(${element.dec})`, enc: `w.eList(${element.enc})`, shape: "list" };
@@ -273,7 +270,7 @@ function emitModel(ctx: Context, id: ModelId, doc: ModelDocument, cls: string, m
   const wireKeys: Record<string, string> = {};
   for (const rule of mapping.rules) {
     const attr = doc.attributes.find((a) => a.name === rule.to) as AttributeSpec;
-    const wire = attributeWire(ctx, attr, rule, refuse);
+    const wire = attributeWire(ctx, doc, id, attr, refuse);
     const policy = policies(rule, refuse);
     const first = rule.key[0] as string;
     wireKeys[rule.to] = first;
