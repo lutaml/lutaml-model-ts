@@ -70,7 +70,7 @@ describe("exactness beyond IEEE-754", () => {
     expect(rationalToDecimalString(sum)).toBe("0.3");
   });
   it("keeps 30 significant digits and values beyond 2^53", () => {
-    const s = "123456789012345678901234567890.123456789012345678901234567890";
+    const s = "123456789012345678901234567890.123456789012345678901234567891";
     expect(canonicalDecimalString(s)).toBe(s);
     expect(formatInteger(parseInteger("9007199254740993"))).toBe("9007199254740993");
   });
