@@ -1,0 +1,47 @@
+{
+  "lml": 2,
+  "model": "LmlExportFixtures::PolyBase",
+  "register": "default",
+  "attributes": [
+    {
+      "name": "_class",
+      "type": {
+        "kind": "builtin",
+        "name": "string"
+      },
+      "required": false,
+      "collection": false,
+      "default": {
+        "present": false
+      },
+      "initialize_empty": false
+    }
+  ],
+  "mappings": {
+    "xml": {
+      "rules": [
+        {
+          "kind": "attribute",
+          "name": [
+            "item-type"
+          ],
+          "to": "_class",
+          "polymorphic_map": {
+            "basic": "LmlExportFixtures::PolyBase"
+          },
+          "render": {
+            "nil": "omit",
+            "empty": "omit",
+            "default": false
+          },
+          "namespace": {
+            "mode": "inherit"
+          }
+        }
+      ],
+      "namespace": {
+        "mode": "inherit"
+      }
+    }
+  }
+}

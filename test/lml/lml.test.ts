@@ -356,3 +356,49 @@ describe("untrusted input", () => {
     expect(loaded.document.model).toBe("B");
   });
 });
+
+// 02d v2 contract: golden documents exported by the Ruby reference at
+// lutaml-model 16104dcc (Exporter.project -> Document#canonical_json / #checksum).
+describe("02d contract: ordered, mixed_content, sequence, child/root mappings, polymorphic_map", () => {
+  const golden: Record<string, string> = {
+    SequencedShape: "sha256:336e44856fc5f081ebf817fa2e185d75958b068357aceb3da88ec0eb41155bab",
+    ChoiceSequence: "sha256:9df0e03695f611b723486c59ea2dc683456b821f49fea22640865099785eda90",
+    ChildMapped: "sha256:1cd36c9e3ac1fbd882f75c2749cb37b409c940ebc9b078c293193d9bd3fac238",
+    RootMapped: "sha256:6e670ab34409c876e8c8778b9e41654c18024ad829b9c5f5a6281094b55cfd3b",
+    PolyBase: "sha256:bc665da8849a4debe1bdd0b2049143de79da54663dde3fa00a528d06231818ce",
+    PolyHolder: "sha256:159cc5ad8331af867f511245857fb9df90db2fc04dc7e71cc22f5f36c9c805ac",
+    MathShape: "sha256:e6f508fd375276232a616501b7289d85a5c20502c74949c64a904cff10977195",
+    MixedShape: "sha256:860c1830afe64624964276ba092c2fc081ad16be210b104f97468f066083321f",
+  };
+  for (const [name, checksum] of Object.entries(golden)) {
+    for (const format of ["json", "yaml"] as const) {
+      it(`${name} loads and reproduces Ruby's canonical bytes and checksum (${format})`, () => {
+        const loaded = loadDocument(bytes(json(`v2_${name}.json`), format), format);
+        expect(loaded.canonicalJson).toBe(text(`v2_${name}.canonical.json`));
+        expect(loaded.checksum).toBe(checksum);
+      });
+    }
+  }
+
+  // [fixture, mutate, code, location] -- outcomes measured on the Ruby validator.
+  const refused: Record<string, [string, (d: any) => void, ErrorCode, string]> = {
+    "ordered not boolean": ["MathShape", (d) => { d.mappings.xml.ordered = "yes"; }, "unsupported_mapping", "/mappings/xml/ordered"],
+    "mixed_content not boolean": ["MixedShape", (d) => { d.mappings.xml.mixed_content = 1; }, "unsupported_mapping", "/mappings/xml/mixed_content"],
+    "sequence outside xml": ["ChildMapped", (d) => { d.mappings.json.sequence = []; }, "unsupported_mapping", "/mappings/json/sequence"],
+    "sequence not an array": ["SequencedShape", (d) => { d.mappings.xml.sequence = {}; }, "invalid_document", "/mappings/xml/sequence"],
+    "compositor with an element kind": ["SequencedShape", (d) => { d.mappings.xml.sequence[0].kind = "element"; }, "unsupported_mapping", "/mappings/xml/sequence/0/kind"],
+    "compositor members not an array": ["SequencedShape", (d) => { d.mappings.xml.sequence[0].members = "x"; }, "invalid_document", "/mappings/xml/sequence/0/members"],
+    "compositor member not an object": ["SequencedShape", (d) => { d.mappings.xml.sequence[0].members[0] = 5; }, "invalid_document", "/mappings/xml/sequence/0/members/0"],
+    "executable key in a nested choice member": ["ChoiceSequence", (d) => { d.mappings.xml.sequence[0].members[1].members[0].with = {}; }, "unsupported_mapping", "/mappings/xml/sequence/0/members/1/members/0/with"],
+    "polymorphic_map not an object": ["PolyBase", (d) => { d.mappings.xml.rules[0].polymorphic_map = "x"; }, "invalid_document", "/mappings/xml/rules/0/polymorphic_map"],
+    "polymorphic_map value not a string": ["PolyBase", (d) => { d.mappings.xml.rules[0].polymorphic_map.basic = 3; }, "invalid_document", "/mappings/xml/rules/0/polymorphic_map/basic"],
+    "hash format stays unsupported": ["ChildMapped", (d) => { d.mappings.hash = {}; }, "unsupported_format", "/mappings/hash"],
+  };
+  for (const [name, [fixture, mutate, code, location]] of Object.entries(refused)) {
+    it(`refuses ${name} with ${code} at ${location}`, () => {
+      const doc = json(`v2_${fixture}.json`);
+      mutate(doc);
+      expect(where(refusal(loadDocument, doc))).toEqual([code, location]);
+    });
+  }
+});

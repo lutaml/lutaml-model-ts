@@ -1,0 +1,51 @@
+{
+  "lml": 2,
+  "model": "LmlExportFixtures::MixedShape",
+  "register": "default",
+  "attributes": [
+    {
+      "name": "content",
+      "type": {
+        "kind": "builtin",
+        "name": "string"
+      },
+      "required": false,
+      "collection": {
+        "min": 0,
+        "max": null
+      },
+      "default": {
+        "present": false
+      },
+      "initialize_empty": false
+    }
+  ],
+  "mappings": {
+    "xml": {
+      "root": {
+        "element": "p",
+        "mixed": true
+      },
+      "ordered": true,
+      "mixed_content": true,
+      "rules": [
+        {
+          "kind": "content",
+          "to": "content",
+          "render": {
+            "nil": "omit",
+            "empty": "omit",
+            "default": false
+          }
+        }
+      ],
+      "namespace": {
+        "mode": "inherit"
+      }
+    }
+  },
+  "ordered_content": {
+    "member": "__lml_content",
+    "version": 1
+  }
+}

@@ -30,8 +30,9 @@ const MAX_DEPTH = 256;
 
 const MODEL_KEYS = ["lml", "model", "register", "attributes", "mappings", "ordered_content"];
 const ATTRIBUTE_KEYS = ["name", "type", "required", "collection", "default", "initialize_empty", "values", "discriminator"];
-const RULE_KEYS = ["kind", "name", "key", "to", "namespace", "prefix", "cdata", "render", "discriminator", "members", "min", "max"];
-const FORMAT_KEYS = ["root", "namespace", "rules", "root_mappings", "child_mappings"];
+const RULE_KEYS = ["kind", "name", "key", "to", "namespace", "prefix", "cdata", "render", "discriminator", "members", "min", "max", "child_mappings", "root_mappings", "polymorphic_map"];
+const FORMAT_KEYS = ["root", "namespace", "rules", "root_mappings", "child_mappings", "ordered", "mixed_content", "sequence"];
+const COMPOSITOR_KINDS = ["sequence", "choice"];
 const EXECUTABLE_RULE_KEYS = ["with", "custom_methods", "delegate", "transform", "proc", "lambda", "method", "callback"];
 const BUNDLE_KEYS = ["lml_bundle", "roots", "models", "value_types", "capabilities", "provenance"];
 const MANIFEST_KEYS = ["manifest", "lml_checksum", "schema_version", "generator_version", "target", "capabilities", "corpora", "files", "dependencies"];
@@ -291,11 +292,44 @@ function mappingsV2(mappings: Tree | undefined, at: string, id: string): void {
     expectObject(mapping, loc);
     onlyKeys(mapping, FORMAT_KEYS, loc, "unsupported_mapping");
     if (has(mapping, "namespace")) namespace(mapping["namespace"], `${loc}/namespace`, id, format);
+    mappingFlags(mapping, loc, id, format);
     if (!has(mapping, "rules")) continue;
     const rules = mapping["rules"];
     expectArray(rules, `${loc}/rules`);
     rules.forEach((rule, i) => ruleV2(rule, `${loc}/rules/${i}`, id, format));
   }
+}
+
+/** ordered / mixed_content are booleans; sequence is an array of compositors (xml only). */
+function mappingFlags(mapping: Obj, loc: string, id: string, format: string): void {
+  for (const flag of ["ordered", "mixed_content"]) {
+    if (has(mapping, flag) && typeof mapping[flag] !== "boolean") {
+      fail("unsupported_mapping", `${flag} must be true or false`, `${loc}/${flag}`, { model_id: id, format });
+    }
+  }
+  if (!has(mapping, "sequence")) return;
+  if (format !== "xml") fail("unsupported_mapping", "sequence is xml only", `${loc}/sequence`, { model_id: id, format });
+  const groups = mapping["sequence"];
+  expectArray(groups, `${loc}/sequence`);
+  groups.forEach((group, i) => compositorV2(group, `${loc}/sequence/${i}`, id, format));
+}
+
+function compositorV2(node: Tree | undefined, at: string, id: string, format: string): void {
+  ruleV2(node, at, id, format);
+  const group = node as Obj;
+  const kind = group["kind"];
+  if (!(typeof kind === "string" && COMPOSITOR_KINDS.includes(kind))) {
+    fail("unsupported_mapping", "expected a sequence or choice", at + pointer("kind"), { model_id: id, format });
+  }
+  const members = group["members"];
+  expectArray(members, `${at}/members`);
+  members.forEach((member, i) => {
+    const loc = `${at}/members/${i}`;
+    expectObject(member, loc);
+    const mk = member["kind"];
+    if (typeof mk === "string" && COMPOSITOR_KINDS.includes(mk)) compositorV2(member, loc, id, format);
+    else ruleV2(member, loc, id, format);
+  });
 }
 
 function ruleV2(rule: Tree | undefined, at: string, id: string, format: string): void {
@@ -311,6 +345,13 @@ function ruleV2(rule: Tree | undefined, at: string, id: string, format: string):
     fail("unsupported_mapping", `rule kind ${describe(kind)}`, at + pointer("kind"), { model_id: id, format });
   }
   if (has(rule, "namespace")) namespace(rule["namespace"], `${at}/namespace`, id, format);
+  if (has(rule, "polymorphic_map")) {
+    const map = rule["polymorphic_map"];
+    expectObject(map, `${at}/polymorphic_map`);
+    for (const [k, v] of Object.entries(map)) {
+      if (typeof v !== "string" || v === "") fail("invalid_document", "expected a non-empty string", `${at}/polymorphic_map${pointer(k)}`);
+    }
+  }
   if (has(rule, "name")) expectArray(rule["name"], `${at}/name`);
   if (has(rule, "key")) expectArray(rule["key"], `${at}/key`);
   if (has(rule, "render")) render(rule["render"], `${at}/render`, id, format);

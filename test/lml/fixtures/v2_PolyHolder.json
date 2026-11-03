@@ -1,0 +1,56 @@
+{
+  "lml": 2,
+  "model": "LmlExportFixtures::PolyHolder",
+  "register": "default",
+  "attributes": [
+    {
+      "name": "items",
+      "type": {
+        "kind": "model",
+        "id": "LmlExportFixtures::PolyBase@default"
+      },
+      "required": false,
+      "collection": {
+        "min": 0,
+        "max": null
+      },
+      "default": {
+        "present": false
+      },
+      "initialize_empty": false
+    }
+  ],
+  "mappings": {
+    "xml": {
+      "root": {
+        "element": "holder"
+      },
+      "rules": [
+        {
+          "kind": "element",
+          "name": [
+            "item"
+          ],
+          "to": "items",
+          "discriminator": {
+            "attribute": "type",
+            "cases": {
+              "base": "LmlExportFixtures::PolyBase@default"
+            }
+          },
+          "render": {
+            "nil": "omit",
+            "empty": "omit",
+            "default": false
+          },
+          "namespace": {
+            "mode": "inherit"
+          }
+        }
+      ],
+      "namespace": {
+        "mode": "inherit"
+      }
+    }
+  }
+}
