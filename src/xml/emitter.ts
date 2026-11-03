@@ -345,7 +345,9 @@ function emitModel(ctx: Context, id: ModelId, doc: ModelDocument, cls: string, m
 
   const root = mapping.root === null || mapping.root === undefined ? null : mapping.root.element;
   if (root !== null && (typeof root !== "string" || root === "")) refuse.raise("invalid_document", "root element needs a name");
-  const rootAccept = acceptList([own.uri]);
+  // A namespaced model also accepts a root with no namespace, read as if it applied (Ruby does; the mapping's
+  // prefix is only the writer's preferred prefix, mml declares "mml"). A different non-empty namespace is refused.
+  const rootAccept = acceptList(own.uri !== null ? [own.uri, null] : [own.uri]);
   const readSpec = [
     `const RSPEC_${cls}: x.ModelSpec = {`,
     `  id: ${q(id)}, root: ${q(root)}, ns: ${rootAccept}, ordered: ${ordered}, mixed: ${mixed}, tokens: ${tokens},`,

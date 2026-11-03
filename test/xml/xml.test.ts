@@ -121,9 +121,13 @@ type Override = { error: ErrorCode; attribute?: string } | { data: unknown };
 const OVERRIDES: Record<string, Override> = {
   // Ruby matches a prefixed attribute by local name regardless of namespace.
   "person-prefixed-attribute-lenient": { data: { id: null, lang: null, name: null, nick: null, tags: null, addr: null, age: null, ni: null, nb: null, ee: null } },
-  // Ruby accepts any root element name or namespace.
+  // Ruby accepts any root element name or namespace; TS refuses another name or another non-empty namespace
+  // (a root with no namespace is read as in the model's namespace).
   "person-wrong-root": { error: "invalid_document" },
   "person-wrong-namespace": { error: "invalid_document" },
+  // Ruby's from_xml with a register (what mml uses) reads an empty mixed element as one empty text with a text token;
+  // the oracle's register-less call takes the Leptris plan fast path, which reads none. TS follows the register path.
+  "para-empty": { data: { text: [""], b: null, i: null, __lml_content: [{ kind: "text", attribute: "text", index: 0 }] } },
   // Ruby reads an unparseable integer as nil.
   "person-bad-integer": { error: "invalid_document", attribute: "age" },
   // Ruby keeps the first of a repeated single-valued element; the TS reader refuses it (REVIEW-TS-1 L6).
@@ -276,7 +280,7 @@ describe.skipIf(!available)("generated XML codecs (moxml-ts)", () => {
         expect(dump(await codec.parse(text)), `${c.id}: ${text}`).toEqual(expected);
         checked += 1;
       }
-      expect(checked).toBeGreaterThanOrEqual(22);
+      expect(checked).toBeGreaterThanOrEqual(21); // para-empty moved to OVERRIDES; its round trip is in the 07c block below
     });
 
     it("emits namespaces by prefix and by default declaration", async () => {
@@ -398,6 +402,85 @@ describe.skipIf(!available)("hand-written bundles: rule namespaces the Ruby DSL 
     const info = await infoOf(() => codec.stringify(value));
     expect(info).toMatchObject({ reason: "unsupported_mapping", format: "xml" });
     expect(info?.detail).toMatch(/declares no prefix/);
+  });
+});
+
+describe.skipIf(!available)("namespace-less root and empty ordered text (mml pilot 07c)", () => {
+  const attr = (name: string, extra: object = {}): unknown => ({
+    name, type: { kind: "builtin", name: "string" }, required: false, collection: false,
+    default: { present: false }, initialize_empty: false, ...extra,
+  });
+  const many = { min: 0, max: null };
+  const bundle = (prefix: string | undefined): Bundle => ({
+    lml_bundle: 1,
+    roots: ["Doc@default", "Tok@default"],
+    models: {
+      "Doc@default": {
+        lml: 2, model: "Doc", register: "default",
+        attributes: [attr("x")],
+        mappings: { xml: {
+          root: { element: "d" },
+          namespace: prefix === undefined ? { mode: "uri", uri: "urn:d" } : { mode: "uri", uri: "urn:d", prefix },
+          rules: [{ kind: "element", name: ["x"], to: "x", namespace: { mode: "inherit" } }],
+        } },
+      },
+      // Mirrors a mixed mml leaf (mi, mo, mtext): text content collection plus one child element.
+      "Tok@default": {
+        lml: 2, model: "Tok", register: "default",
+        attributes: [attr("value", { collection: many }), attr("e", { collection: many })],
+        mappings: { xml: {
+          root: { element: "t", mixed: true }, ordered: true, mixed_content: true,
+          rules: [
+            { kind: "element", name: ["e"], to: "e", namespace: { mode: "inherit" } },
+            { kind: "content", to: "value" },
+          ],
+          namespace: { mode: "inherit" },
+        } },
+        ordered_content: { member: "__lml_content", version: 1 },
+      },
+    } as never,
+    value_types: {},
+    capabilities: ["xml"],
+  });
+  const text = (index: number) => ({ kind: "text", attribute: "value", index });
+  const element = { kind: "element", attribute: "e", index: 0 };
+
+  it("a namespaced model accepts a root with no namespace and refuses a different namespace", { timeout: 180_000 }, async () => {
+    const dflt = (await load(generateInto(bundle(undefined))))["xml"].CODECS["Doc@default"];
+    // unqualified root and unqualified descendants read as if the default namespace applied
+    expect(dump(await dflt.parse("<d><x>1</x></d>"))).toEqual({ x: "1" });
+    expect(dump(await dflt.parse('<d xmlns="urn:d"><x>2</x></d>'))).toEqual({ x: "2" });
+    // a different non-empty namespace is still refused
+    const other = await infoOf(() => dflt.parse('<d xmlns="urn:other"><x>3</x></d>'));
+    expect(other).toMatchObject({ reason: "invalid_document", model_id: "Doc@default" });
+    expect(other?.detail).toMatch(/expected root element d in urn:d.*found d in urn:other/);
+    expect((await infoOf(() => dflt.parse("<e/>")))?.detail).toMatch(/expected root element d/);
+    // a mapping that names a preferred prefix (mml declares "mml") reads the same documents
+    const prefixed = (await load(generateInto(bundle("p"))))["xml"].CODECS["Doc@default"];
+    expect(dump(await prefixed.parse("<d><x>1</x></d>"))).toEqual({ x: "1" });
+    expect(dump(await prefixed.parse('<p:d xmlns:p="urn:d"><p:x>4</p:x></p:d>'))).toEqual({ x: "4" });
+    expect((await infoOf(() => prefixed.parse('<d xmlns="urn:other"/>')))?.reason).toBe("invalid_document");
+  });
+
+  it("an empty or whitespace-only element reads the text tokens Ruby captures", { timeout: 180_000 }, async () => {
+    const codec = (await load(generateInto(bundle(undefined))))["xml"].CODECS["Tok@default"];
+    const read = async (xml: string) => dump(await codec.parse(xml)) as { value: unknown; e: unknown; __lml_content: unknown };
+    for (const xml of ["<t/>", "<t></t>"]) {
+      const v = await read(xml);
+      expect([v.value, v.__lml_content], xml).toEqual([[""], [text(0)]]);
+    }
+    const blank = await read("<t> </t>");
+    expect([blank.value, blank.__lml_content]).toEqual([[" "], [text(0)]]);
+    const child = await read("<t><e>a</e></t>");
+    // an element child alone adds no text (Ruby: tokens [element], value empty)
+    expect([child.value, child.__lml_content]).toEqual([null, [element]]);
+    const spaced = await read("<t> <e>a</e> </t>");
+    expect([spaced.value, spaced.__lml_content]).toEqual([[" ", " "], [text(0), element, text(1)]]);
+    // the empty text survives a write and a re-read
+    const back = dump(await codec.parse(await codec.stringify(await codec.parse("<t/>")))) as { value: unknown; __lml_content: unknown };
+    expect([back.value, back.__lml_content]).toEqual([[""], [text(0)]]);
+    const plain = await read("<t>x<e>a</e>y</t>");
+    expect([plain.value, plain.__lml_content]).toEqual([["x", "y"], [text(0), element, text(1)]]);
   });
 });
 
