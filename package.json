@@ -1,0 +1,26 @@
+{
+  "name": "lutaml-model-ts",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Typed TypeScript target for LutaML Model LML documents",
+  "type": "module",
+  "license": "BSD-2-Clause",
+  "engines": { "node": ">=22" },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": { "lutaml-model-ts": "dist/cli.js" },
+  "files": ["dist"],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "yaml": "2.9.1"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "typescript": "6.0.3",
+    "vitest": "4.1.12"
+  }
+}
