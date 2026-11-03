@@ -40,20 +40,19 @@ For each file Ruby `from_xml` then `to_xml`, TS `parse` then `stringify`.
 - Two variants: **as-is** (file untouched) and **ns-injected** (only for files whose root `<math>` has no `xmlns`, one attribute is added; written to `.tmp`, the corpus is untouched). The second exists because Ruby accepts a namespace-less `<math>` and TS refuses it; without it 2625 files would only say "refused".
 - Nothing else is stripped or rewritten. DOCTYPE files go to TS as they are.
 
-## Numbers (mml 2.4.7, 7217 comparisons over 4470 files)
+## Numbers (mml 2.4.7, after T4 namespace-less roots, T6 any_attribute)
 
-| suite | ruby | variant | files | pass | refused: doctype | refused by TS only | both refuse | mismatch |
-|---|---|---|---|---|---|---|---|---|
-| mml2 | V3 | as-is | 712 | 0 | 0 | 708 | 4 | 0 |
-| mml2 | V3 | ns-injected | 712 | 689 | 0 | 11 | 4 | 8 |
-| mml3 | V3 | as-is | 1675 | 1638 | 30 | 0 | 0 | 7 |
-| mmlcore | V4 | as-is | 2083 | 44 | 0 | 1924 | 113 | 2 |
-| mmlcore | V4 | ns-injected | 2035 | 1648 | 0 | 0 | 112 | 275 |
+| suite | ruby | variant | files | pass | refused by name | mismatch |
+|---|---|---|---|---|---|---|
+| mml2 | V3 | as-is | 712 | 690 | 15 (11 TS only, 4 both) | 7 |
+| mml2 | V3 | ns-injected | 712 | 690 | 15 | 7 |
+| mml3 | V3 | as-is | 1675 | 1644 | 30 (DOCTYPE) | 1 |
+| mmlcore | V4 | as-is | 2083 | 1916 | 115 (2 TS only, 113 both) | 52 |
+| mmlcore | V4 | ns-injected | 2035 | 1871 | 113 (1 TS only, 112 both) | 51 |
 
-Total 4019 pass, 30 refused (doctype), 2643 refused by TS only, 233 refused by both, 292 mismatch.
-mml3 is the cleanest signal (every file namespaced): 1638 of 1675 pass (97.8%), 30 refused for DOCTYPE, 7 mismatch.
-The injected rows overlap the as-is rows on the same files, so do not add the columns across variants to count files.
-Only V3 for mml2/mml3 and V4 for mmlcore were run (a Ruby version per suite, not the cross product).
+5717 of 6217 compared files pass. The injected rows overlap the as-is rows on the same files, so do not add across variants.
+Remaining mismatch classes: attribute-value whitespace (TS follows the XML spec, libxml2 keeps literal LF/TAB), undefined entity references (input not well-formed), whitespace-only text and empty-text tokens in a few element-only cases. Both sides refuse comments/PIs in ordered content.
+First run (before T4/T6), for comparison: mml2 as-is 0/712, mml3 1638/1675, mmlcore as-is 44/2083; 185 mismatches were catch-all attributes, now 0.
 
 ## Refused by name (not failures)
 

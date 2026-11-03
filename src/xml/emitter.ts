@@ -229,7 +229,7 @@ function emitModel(ctx: Context, id: ModelId, doc: ModelDocument, cls: string, m
   let anyAttribute: string | null = null;
 
   for (const rule of mapping.rules) {
-    if ((rule.kind as string) === "any_attribute") {
+    if (rule.kind === "any_attribute") {
       // map_all_attributes: `{kind, to}` only, one per mapping, a non-collection hash attribute.
       for (const key of Object.keys(rule)) {
         if (key !== "kind" && key !== "to") refuse.unsupported(`any_attribute carries only kind and to, not ${key}`, rule.to);

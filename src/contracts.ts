@@ -71,7 +71,7 @@ export interface RenderPolicy {
 }
 
 export interface XmlRule {
-  readonly kind: "attribute" | "element" | "content";
+  readonly kind: "attribute" | "element" | "content" | "any_attribute";
   /** Ordered aliases; absent for content rules. */
   readonly name?: readonly string[];
   readonly to: string;
