@@ -5,11 +5,28 @@
   "description": "Typed TypeScript target for LutaML Model LML documents",
   "type": "module",
   "license": "BSD-2-Clause",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "bin": { "lutaml-model-ts": "dist/cli.js" },
-  "files": ["dist"],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./exact": {
+      "types": "./dist/codecs/exact.d.ts",
+      "default": "./dist/codecs/exact.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "lutaml-model-ts": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build": "tsc -p tsconfig.build.json",
