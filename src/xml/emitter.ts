@@ -219,14 +219,31 @@ function emitModel(ctx: Context, id: ModelId, doc: ModelDocument, cls: string, m
   const attrs = new Map(doc.attributes.map((a) => [a.name, a] as const));
   const seen = new Set<string>();
   const readAttrs: string[] = [];
+  const claimedAttrs: string[] = [];
   const readElems: string[] = [];
   const writeAttrs: string[] = [];
   const writeElems: string[] = [];
   let readContent = "null";
   let writeContent = "null";
   let contentSeen = false;
+  let anyAttribute: string | null = null;
 
   for (const rule of mapping.rules) {
+    if ((rule.kind as string) === "any_attribute") {
+      // map_all_attributes: `{kind, to}` only, one per mapping, a non-collection hash attribute.
+      for (const key of Object.keys(rule)) {
+        if (key !== "kind" && key !== "to") refuse.unsupported(`any_attribute carries only kind and to, not ${key}`, rule.to);
+      }
+      if (anyAttribute !== null) refuse.unsupported("at most one any_attribute rule per mapping", rule.to);
+      const target = attrs.get(rule.to);
+      if (target === undefined) refuse.raise("dangling_reference", `any_attribute maps unknown attribute ${rule.to}`, rule.to);
+      const targetType = (target as AttributeSpec).type;
+      if (targetType.kind !== "builtin" || targetType.name !== "hash" || ((target as AttributeSpec).collection ?? false) !== false) {
+        refuse.unsupported("any_attribute needs a non-collection hash attribute", rule.to);
+      }
+      anyAttribute = rule.to;
+      continue;
+    }
     for (const key of Object.keys(rule)) {
       if (!RULE_KEYS.has(key)) refuse.unsupported(`rule-level ${key} is not supported`, rule.to);
     }
@@ -264,6 +281,7 @@ function emitModel(ctx: Context, id: ModelId, doc: ModelDocument, cls: string, m
       if (uri !== null && prefix === null) {
         writerRefusals.push(`attribute ${first} is in namespace ${uri} but declares no prefix`);
       }
+      claimedAttrs.push(...names);
       readAttrs.push(`    { to: ${q(rule.to)}, names: ${q(names)}, ns: ${acceptList([uri])}, dec: ${scalar.dec} },`);
       writeAttrs.push(
         `    { to: ${q(rule.to)}, name: ${q(first)}, ns: ${nsOut(uri, prefix)}, enc: ${scalar.enc}, nil: ${q(policy.nil)}, empty: ${q(policy.empty)} },`,
@@ -352,6 +370,7 @@ function emitModel(ctx: Context, id: ModelId, doc: ModelDocument, cls: string, m
     `const RSPEC_${cls}: x.ModelSpec = {`,
     `  id: ${q(id)}, root: ${q(root)}, ns: ${rootAccept}, ordered: ${ordered}, mixed: ${mixed}, tokens: ${tokens},`,
     "  attrs: [", ...readAttrs, "  ],",
+    `  any: ${anyAttribute === null ? "null" : q({ to: anyAttribute, claimed: [...new Set(claimedAttrs)].sort(byCodePoint) })},`,
     "  elems: [", ...readElems, "  ],",
     `  content: ${readContent},`,
     "};",
@@ -361,6 +380,7 @@ function emitModel(ctx: Context, id: ModelId, doc: ModelDocument, cls: string, m
     `const WSPEC_${cls}: x.WSpec = {`,
     `  id: ${q(id)}, ordered: ${tokens}, refusal: ${refusal},`,
     "  attrs: [", ...writeAttrs, "  ],",
+    `  any: ${q(anyAttribute)},`,
     "  elems: [", ...writeElems, "  ],",
     `  content: ${writeContent},`,
     "};",

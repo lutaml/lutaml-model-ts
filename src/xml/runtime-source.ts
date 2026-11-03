@@ -282,6 +282,8 @@ export interface ModelSpec {
   /** The model declares the ordered-content member, so tokens are captured. */
   readonly tokens: boolean;
   readonly attrs: readonly AttrRule[];
+  /** map_all_attributes: the hash member and the local names the explicit attribute rules claim. */
+  readonly any: { readonly to: string; readonly claimed: readonly string[] } | null;
   readonly elems: readonly ElemRule[];
   readonly content: ContentRule | null;
 }
@@ -353,6 +355,19 @@ export function readModel<T>(el: El, spec: ModelSpec, cls: new (init: never) => 
     if (raw === null) continue;
     const loc = el.loc + "/@" + (rule.names[0] ?? "");
     setOwn(init, rule.to, withContext(spec, rule.to, rule.names[0] ?? "", loc, () => rule.dec(raw, el)));
+  }
+  if (spec.any !== null) {
+    // Ruby: every attribute no rule claims, keyed by LOCAL name (prefix stripped), later wins; xmlns
+    // declarations are not attributes and schemaLocation is excluded. Unset when nothing qualifies.
+    const rest: Record<string, unknown> = {};
+    let any = false;
+    for (const a of attributesOf(el)) {
+      if (a.prefix === "xmlns" || (a.prefix === "" && a.localName === "xmlns")) continue;
+      if (a.localName === "schemaLocation" || spec.any.claimed.includes(a.localName)) continue;
+      setOwn(rest, a.localName, a.value);
+      any = true;
+    }
+    if (any) setOwn(init, spec.any.to, rest);
   }
   const tokens: Token[] = [];
   const texts: string[] = [];
@@ -706,6 +721,8 @@ export interface WElem {
 export interface WSpec {
   readonly id: string;
   readonly attrs: readonly WAttr[];
+  /** map_all_attributes: the hash member re-emitted as unprefixed attributes. */
+  readonly any: string | null;
   readonly elems: readonly WElem[];
   readonly content: { readonly to: string; readonly collection: boolean; readonly cdata: boolean } | null;
   readonly ordered: boolean;
@@ -751,6 +768,14 @@ function refuseCdata(spec: WSpec, rule: string): never {
   throw new XmlError("unsupported_mapping", "CDATA output needs a comment/CDATA node constructor that moxml-ts does not provide", "").context(spec.id, undefined, rule);
 }
 
+/** Ruby to_s of a neutral scalar; a nested value has no portable text and is refused. */
+function anyAttributeText(spec: WSpec, to: string, key: string, v: unknown): string {
+  if (typeof v === "string") return v;
+  if (typeof v === "boolean" || typeof v === "bigint") return String(v);
+  if (typeof v === "number") return Number.isInteger(v) && !Object.is(v, -0) ? String(v) : floatText(v);
+  throw new XmlError("invalid_document", "any_attribute value for " + key + " must be a scalar", "").context(spec.id, to);
+}
+
 /** Writes one element of a model into its parent (or as a detached root). */
 export function writeModel<T extends object>(
   w: Writer,
@@ -773,6 +798,15 @@ export function writeModel<T extends object>(
     if (text === "" && rule.empty === "omit") continue;
     if (rule.ns === null) host.setAttribute(rule.name, text);
     else host.setAttributeNS(rule.ns.uri, qname(rule.name, rule.ns), text);
+  }
+  if (spec.any !== null) {
+    const bag = get(spec.any);
+    if (typeof bag === "object" && bag !== null && !Array.isArray(bag)) {
+      for (const [k, v] of Object.entries(bag)) {
+        if (v === null || v === undefined) continue;
+        host.setAttribute(k, anyAttributeText(spec, spec.any, k, v));
+      }
+    }
   }
   const order = (get(ORDERED_MEMBER) ?? null) as readonly Token[] | null;
   const writeElem = (rule: WElem, item: unknown): void => {
