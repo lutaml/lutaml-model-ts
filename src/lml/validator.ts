@@ -27,7 +27,21 @@ export const ORDERED_CONTENT_MEMBER = "__lml_content";
 const FLAG_KEYS = ["required", "initialize_empty"];
 const DOT_SEGMENTS = ["", ".", ".."];
 const MAX_SAFE_INTEGER = Number.MAX_SAFE_INTEGER;
-const MAX_DEPTH = 256;
+/** Containers nest at most this deep (Ruby DocumentValidator::MAX_DEPTH; root is level 1). */
+export const MAX_DEPTH = 100;
+/** Attribute names become fields and accessors: identifiers only. */
+const ATTRIBUTE_NAME = /^[a-z_][a-zA-Z0-9_]*$/;
+/** Names a generated class cannot carry (Ruby RESERVED_ATTRIBUTE_NAMES, measured and pinned there). */
+export const RESERVED_ATTRIBUTE_NAMES: readonly string[] = [
+  "__id__", "__send__", "attribute_order", "class", "doctype", "element_order",
+  "encoding", "extract_register_id", "import_declaration_plan", "initialize",
+  "initialize_clone", "initialize_copy", "initialize_dup", "lutaml_register",
+  "pending_plan_root_element", "prepare_instance_format_options",
+  "public_send", "record_mutation", "to_format", "to_json", "to_xml", "to_yaml",
+  "value_set_for", "xml_declaration", "xml_ns_prefixes",
+];
+const MAPPING_OBJECT_KEYS = ["root_mappings", "child_mappings"];
+const XML_PREFIX = /^[A-Za-z_][A-Za-z0-9_.-]*$/;
 
 const MODEL_KEYS = ["lml", "model", "register", "attributes", "mappings", "ordered_content"];
 const ATTRIBUTE_KEYS = ["name", "type", "required", "collection", "default", "initialize_empty", "values", "discriminator"];
@@ -65,7 +79,9 @@ function wellFormed(text: string, at: string): void {
 
 /** Deep copy into a frozen neutral tree, rejecting what v2 does not allow. */
 function neutral(node: Raw, at: string, legacy: boolean, depth = 0): Tree {
-  if (depth > MAX_DEPTH) fail("invalid_document", "nesting too deep", at);
+  if ((node instanceof Map || Array.isArray(node)) && depth >= MAX_DEPTH) {
+    fail("invalid_document", `nesting deeper than ${MAX_DEPTH} levels`, at);
+  }
   if (node instanceof Map) {
     const out: Record<string, Tree> = {};
     for (const [key, value] of node) {
@@ -203,6 +219,7 @@ function attributesV2(attributes: Tree | undefined, at: string, id: string): voi
     requireKeys(attr, ["name", "type"], loc);
     const name = attr["name"];
     expectString(name, loc + pointer("name"));
+    attributeName(name, loc + pointer("name"), id);
     if (name === ORDERED_CONTENT_MEMBER) {
       fail("reserved_member", `${name} is reserved for ordered content`, loc + pointer("name"),
         { model_id: id, attribute: name });
@@ -220,6 +237,17 @@ function attributesV2(attributes: Tree | undefined, at: string, id: string): voi
     if (has(attr, "values")) expectArray(attr["values"], loc + pointer("values"));
     if (has(attr, "discriminator")) discriminatorShape(attr["discriminator"], loc + pointer("discriminator"), id);
   });
+}
+
+function attributeName(name: string, at: string, id: string): void {
+  if (!ATTRIBUTE_NAME.test(name)) {
+    fail("invalid_document", `attribute name ${JSON.stringify(name)} must match \\A[a-z_][a-zA-Z0-9_]*\\z`, at,
+      { model_id: id, attribute: name });
+  }
+  if (RESERVED_ATTRIBUTE_NAMES.includes(name)) {
+    fail("reserved_member", `attribute name ${name} breaks Serializable (reserved attribute name)`, at,
+      { model_id: id, attribute: name });
+  }
 }
 
 function rejectLambdaDefault(attr: Obj, loc: string, id: string): void {
@@ -305,11 +333,21 @@ function mappingsV2(mappings: Tree | undefined, at: string, id: string): void {
     expectObject(mapping, loc);
     onlyKeys(mapping, FORMAT_KEYS, loc, "unsupported_mapping");
     if (has(mapping, "namespace")) namespace(mapping["namespace"], `${loc}/namespace`, id, format);
+    if (has(mapping, "root")) mappingRoot(mapping["root"], `${loc}/root`, id, format);
+    for (const key of MAPPING_OBJECT_KEYS) if (has(mapping, key)) expectObject(mapping[key], `${loc}/${key}`);
     mappingFlags(mapping, loc, id, format);
     if (!has(mapping, "rules")) continue;
     const rules = mapping["rules"];
     expectArray(rules, `${loc}/rules`);
     rules.forEach((rule, i) => ruleV2(rule, `${loc}/rules/${i}`, id, format));
+  }
+}
+
+function mappingRoot(node: Tree | undefined, at: string, id: string, format: string): void {
+  expectObject(node, at);
+  if (has(node, "element")) expectString(node["element"], at + pointer("element"));
+  if (has(node, "mixed") && typeof node["mixed"] !== "boolean") {
+    fail("unsupported_mapping", "root mixed must be true or false", at + pointer("mixed"), { model_id: id, format });
   }
 }
 
@@ -358,6 +396,8 @@ function ruleV2(rule: Tree | undefined, at: string, id: string, format: string):
     fail("unsupported_mapping", `rule kind ${describe(kind)}`, at + pointer("kind"), { model_id: id, format });
   }
   if (has(rule, "namespace")) namespace(rule["namespace"], `${at}/namespace`, id, format);
+  for (const key of MAPPING_OBJECT_KEYS) if (has(rule, key)) expectObject(rule[key], `${at}/${key}`);
+  if (has(rule, "cdata")) expectBool(rule["cdata"], `${at}/cdata`);
   if (has(rule, "polymorphic_map")) {
     const map = rule["polymorphic_map"];
     expectObject(map, `${at}/polymorphic_map`);
@@ -378,10 +418,16 @@ function namespace(node: Tree | undefined, at: string, id: string, format: strin
     fail("unsupported_mapping", `namespace mode ${describe(mode)}`, at + pointer("mode"), { model_id: id, format });
   }
   onlyKeys(node, ["mode", "uri", "prefix"], at, "unsupported_mapping");
+  if (has(node, "prefix")) prefix(node["prefix"], at + pointer("prefix"));
   if (mode === "uri") expectString(node["uri"], at + pointer("uri"));
   else if (has(node, "uri") || has(node, "prefix")) {
     fail("unsupported_mapping", "uri/prefix only with mode uri", at, { model_id: id, format });
   }
+}
+
+function prefix(node: Tree | undefined, at: string): void {
+  if (typeof node === "string" && XML_PREFIX.test(node)) return;
+  fail("invalid_document", `prefix must match ${"\\A[A-Za-z_][A-Za-z0-9_.-]*\\z"}`, at);
 }
 
 function render(node: Tree | undefined, at: string, id: string, format: string): void {

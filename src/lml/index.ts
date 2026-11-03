@@ -9,7 +9,7 @@ import {
   sortedCanonicalJson,
 } from "./canonical.js";
 import { parseRaw, RawFloat, type Raw } from "./raw.js";
-import { validateRaw, type Tree, type TreeObject } from "./validator.js";
+import { MAX_DEPTH, validateRaw, type Tree, type TreeObject } from "./validator.js";
 
 export { bundleCanonicalJson, bundleChecksum, modelChecksum, rubyFloat, RawFloat };
 export { canonicalFloat, floatWire } from "./float.js";
@@ -45,7 +45,7 @@ export function loadDocument(bytes: Uint8Array, format: SchemaFormat): LoadedDoc
 
 /** Parses and validates a v1 bundle of v2 documents. Implements LoadBundle. */
 export const loadBundle: LoadBundle = (bytes: Uint8Array, format: SchemaFormat): Bundle =>
-  validateRaw(parseRaw(bytes, format), "bundle") as unknown as Bundle;
+  validateRaw(parseRaw(bytes, format, { maxNesting: MAX_DEPTH, rejectDuplicateKeys: true }), "bundle") as unknown as Bundle;
 
 /** Parses and validates a generation manifest. */
 export function loadManifest(bytes: Uint8Array, format: SchemaFormat): Manifest {

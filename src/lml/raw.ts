@@ -55,13 +55,21 @@ const ESCAPES: Readonly<Record<string, string>> = {
 };
 const MAX_PARSE_DEPTH = 512;
 
+/** Stricter JSON rules the Ruby importer applies to bundle text only. */
+export interface ParseOptions {
+  /** Containers nest at most this many levels (Ruby `JSON.parse(max_nesting:)`). */
+  readonly maxNesting?: number;
+  /** An object repeating a key is refused (Ruby `Importer.reject_duplicate_keys!`). */
+  readonly rejectDuplicateKeys?: boolean;
+}
+
 /**
  * Strict RFC 8259 parser into insertion-ordered maps. JSON.parse cannot be
  * used: it reorders integer-like keys and hides 1 versus 1.0.
  */
 class JsonParser {
   private pos = 0;
-  constructor(private readonly src: string) {}
+  constructor(private readonly src: string, private readonly options: ParseOptions = {}) {}
 
   parse(): Raw {
     const value = this.value(0);
@@ -82,6 +90,11 @@ class JsonParser {
     if (depth > MAX_PARSE_DEPTH) this.error("nesting too deep");
     this.space();
     const ch = this.src[this.pos];
+    // Root is level 1; `max_nesting: 100` refuses the 101st container level.
+    const limit = this.options.maxNesting;
+    if ((ch === "{" || ch === "[") && limit !== undefined && depth >= limit) {
+      this.error(`nesting of ${depth + 1} is too deep`);
+    }
     if (ch === "{") return this.object(depth);
     if (ch === "[") return this.array(depth);
     if (ch === '"') return this.string();
@@ -160,7 +173,11 @@ class JsonParser {
       const key = this.string();
       this.space();
       if (this.src[this.pos++] !== ":") this.error("expected :");
-      out.set(key, this.value(depth + 1)); // duplicate key: last wins, first position (as Ruby)
+      // Without the option a duplicate key keeps the last value in its first position (legacy v1, as Ruby).
+      if (this.options.rejectDuplicateKeys && out.has(key)) {
+        fail("invalid_document", `duplicate key ${JSON.stringify(key)}`, "");
+      }
+      out.set(key, this.value(depth + 1));
       this.space();
       const ch = this.src[this.pos++];
       if (ch === "}") return out;
@@ -169,8 +186,8 @@ class JsonParser {
   }
 }
 
-function jsonToRaw(text: string): Raw {
-  return new JsonParser(text).parse();
+function jsonToRaw(text: string, options: ParseOptions): Raw {
+  return new JsonParser(text, options).parse();
 }
 
 function yamlToRaw(text: string): Raw {
@@ -217,10 +234,10 @@ function scalarToRaw(value: unknown): Raw {
 }
 
 /** Parses bytes into the unvalidated tree; never evaluates anything. */
-export function parseRaw(bytes: Uint8Array, format: SchemaFormat): Raw {
+export function parseRaw(bytes: Uint8Array, format: SchemaFormat, options: ParseOptions = {}): Raw {
   const text = decode(bytes);
   try {
-    if (format === "json") return jsonToRaw(text);
+    if (format === "json") return jsonToRaw(text, options);
     if (format === "yaml") return yamlToRaw(text);
   } catch (error) {
     if (error instanceof Error && error.name === "LmlError") throw error;
