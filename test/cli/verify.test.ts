@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -79,6 +80,25 @@ describe("verify", () => {
     expect(reason(() => verifyArtifacts({ root: dir, expectedSha256: digest }))).toMatch(/^invalid_document\|index\.ts/);
   });
 
+  it("refuses a FIFO in place of a listed file without opening it", () => {
+    const { dir, digest } = fresh();
+    rmSync(join(dir, "index.ts"));
+    execFileSync("mkfifo", [join(dir, "index.ts")]);
+    expect(reason(() => verifyArtifacts({ root: dir, expectedSha256: digest }))).toMatch(/^invalid_document\|index\.ts is not a regular file/);
+    const r = cli(["generate", BUNDLE, "--bindings", BINDINGS, "--format", "json", "--out", dir, "--check"]);
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain("stale: index.ts");
+  });
+
+  it("reports an empty extra directory", () => {
+    const { dir, digest } = fresh();
+    mkdirSync(join(dir, "empty"));
+    expect(reason(() => verifyArtifacts({ root: dir, expectedSha256: digest }))).toMatch(/^invalid_document\|.*empty\//);
+    const r = cli(["generate", BUNDLE, "--bindings", BINDINGS, "--format", "json", "--out", dir, "--check"]);
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain("extra: empty/");
+  });
+
   it("compares optional pins", () => {
     const { dir, digest } = fresh();
     expect(reason(() => verifyArtifacts({ root: dir, expectedSha256: digest, generatorVersion: "other/0" }))).toMatch(/^checksum_mismatch\|generator_version/);
@@ -105,6 +125,16 @@ describe("generate --check extras and runtime pin", () => {
     const r = cli(["generate", BUNDLE, "--bindings", BINDINGS, "--format", "json", "--out", dir, "--check"]);
     expect(r.status).toBe(1);
     expect(r.stderr).toContain("extra: old/leftover.ts");
+  });
+
+  it("fails when a listed file is a symlink, as verify does", () => {
+    const { dir } = fresh();
+    writeFileSync(join(SCRATCH, "real-index2.ts"), readFileSync(join(dir, "index.ts")));
+    rmSync(join(dir, "index.ts"));
+    symlinkSync(join(SCRATCH, "real-index2.ts"), join(dir, "index.ts"));
+    const r = cli(["generate", BUNDLE, "--bindings", BINDINGS, "--format", "json", "--out", dir, "--check"]);
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain("stale: index.ts");
   });
 
   it("pins the emitted runtime bytes, not only name and version", () => {

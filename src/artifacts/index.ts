@@ -38,7 +38,7 @@ export function sha256Of(data: string | Uint8Array): Checksum {
   return `sha256:${createHash("sha256").update(data).digest("hex")}`;
 }
 
-type Plain = string | number | boolean | null | readonly Plain[] | { readonly [key: string]: Plain };
+export type Plain = string | number | boolean | null | readonly Plain[] | { readonly [key: string]: Plain };
 
 /**
  * Compact JSON with recursively sorted keys: byte-identical to the Ruby
