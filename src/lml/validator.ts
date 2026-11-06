@@ -233,7 +233,10 @@ function attributesV2(attributes: Tree | undefined, at: string, id: string): voi
     typeSpec(attr["type"], loc + pointer("type"), id, name);
     for (const flag of FLAG_KEYS) if (has(attr, flag)) expectBool(attr[flag], loc + pointer(flag));
     if (has(attr, "collection")) collection(attr["collection"], loc + pointer("collection"));
-    if (has(attr, "default")) defaultSpec(attr["default"], loc + pointer("default"), id, name);
+    if (has(attr, "default")) {
+      defaultSpec(attr["default"], loc + pointer("default"), id, name);
+      typedDefault(attr, loc, id, name);
+    }
     floatDefault(attr, loc, id, name);
     if (has(attr, "values")) expectArray(attr["values"], loc + pointer("values"));
     if (has(attr, "discriminator")) discriminatorShape(attr["discriminator"], loc + pointer("discriminator"), id);
@@ -302,6 +305,37 @@ function defaultSpec(node: Tree | undefined, at: string, id: string, attribute: 
   } else if (has(node, "value")) {
     fail("invalid_document", "absent default carries no value", at + pointer("value"), { model_id: id, attribute });
   }
+}
+
+// Builtin types whose present default must be a JSON integer / boolean / string /
+// object. Mirrors Ruby DocumentValidator#typed_default (and the exporter's portable_scalar).
+const INTEGER_DEFAULT_TYPES = new Set(["integer"]);
+const BOOLEAN_DEFAULT_TYPES = new Set(["boolean"]);
+const STRING_DEFAULT_TYPES = new Set(["string", "token", "uri", "email", "hostname", "ip", "decimal",
+  "rational", "date", "time", "date_time", "time_without_date", "duration", "qname", "base64_binary",
+  "hex_binary", "symbol"]);
+
+function defaultShape(kind: string, item: Tree | undefined): boolean {
+  if (item === null || item === undefined) return true;
+  if (INTEGER_DEFAULT_TYPES.has(kind)) return typeof item === "number" && Number.isInteger(item);
+  if (BOOLEAN_DEFAULT_TYPES.has(kind)) return typeof item === "boolean";
+  if (STRING_DEFAULT_TYPES.has(kind)) return typeof item === "string";
+  if (kind === "hash") return isObj(item);
+  return true;
+}
+
+/** A present default on a builtin type matches that type (collection items each). */
+function typedDefault(attr: Obj, loc: string, id: string, name: string): void {
+  const type = attr["type"];
+  const def = attr["default"];
+  if (!isObj(type) || type["kind"] !== "builtin" || !isObj(def) || def["present"] !== true) return;
+  const kind = type["name"];
+  if (typeof kind !== "string" || kind === "float") return; // floatDefault owns the wire string rule
+  const value = def["value"];
+  const items = attr["collection"] !== undefined && attr["collection"] !== false && Array.isArray(value) ? value : [value];
+  if (items.every((item) => defaultShape(kind, item))) return;
+  fail("non_serializable_default", `default ${JSON.stringify(value)} is not a ${kind}`, loc + pointer("default", "value"),
+    { model_id: id, attribute: name });
 }
 
 /** A float default is a canonical float string (never a JSON number). */

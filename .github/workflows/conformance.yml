@@ -41,7 +41,7 @@ jobs:
         with:
           repository: lutaml/lutaml-model
           # Pinned to the branch head that owns scripts/lml/verify_artifacts.rb.
-          ref: 4e75c92b7d9ab3e3aa5f4f90af4a9ce860c76f72
+          ref: 31dcb998c28ed8063c27be81fc032ca6b2fe88d8
           path: lutaml-model
       - name: Set up Ruby (stdlib only; no bundle install)
         uses: ruby/setup-ruby@v1
