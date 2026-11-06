@@ -239,13 +239,21 @@ describe.skipIf(!available)("generated XML codecs (moxml-ts)", () => {
       expect(info).toMatchObject({ reason: "invalid_document", model_id: "XmlOracle::Person@default", format: "xml", location: "/input" });
     });
 
-    for (const ref of ["&#x0;", "&#x1;", "&#xD800;", "&#1114112;", "&#xFFFE;", "&#99999999999999999999;"]) {
+    for (const ref of ["&#x0;", "&#x1;", "&#xD800;", "&#1114112;", "&#xFFFE;", "&#99999999999999999999;", "&#X0;", "&#X1;", "&#XD800;"]) {
       it(`refuses the character reference ${ref} (outside the XML Char range)`, async () => {
         const info = await infoOf(() => mod["xml"].CODECS["XmlOracle::Plain@default"].parse(`<plain><v>a${ref}b</v></plain>`));
         expect(info?.reason).toBe("invalid_document");
         expect(info?.detail).toMatch(/character reference/);
       });
     }
+
+    it("a '<' in an attribute value cannot hide a character reference behind a comment lookalike", async () => {
+      const codec = mod["xml"].CODECS["XmlOracle::Plain@default"];
+      for (const text of ['<plain id="<!--"><v>a&#0;b</v></plain><!---->', '<plain id="<!--"><v>a&#0;b</v><x y="-->"/></plain>']) {
+        const info = await infoOf(() => codec.parse(text));
+        expect(info?.reason, text).toBe("invalid_document");
+      }
+    });
 
     it("still reads valid references and an invalid-looking one inside CDATA or a comment", async () => {
       const codec = mod["xml"].CODECS["XmlOracle::Plain@default"];

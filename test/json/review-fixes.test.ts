@@ -45,3 +45,28 @@ describe("L8: a __proto__ hash default survives the codec as an own key", () => 
     expect(({} as Record<string, unknown>)["polluted"]).toBeUndefined();
   });
 });
+
+describe("round 3: strict JSON reader exactness, hash keys and order", () => {
+  const hashCodec = async () => {
+    const { json } = await generated(bundleOf([attr("h", "hash")], {}, { mappings: { json: { rules: [{ key: ["h"], to: "h" }] } } }), { json: true });
+    return json?.["CODECS"]["A@default"];
+  };
+  it("refuses an integer beyond 2^53 whose spelling equals the rounded number's", async () => {
+    const codec = await hashCodec();
+    expect(() => codec.parse('{"h":{"n":123456789012345680000}}')).toThrow(/cannot be held exactly/);
+    expect(() => codec.parse('{"h":{"n":12345678901234567890}}')).toThrow(/cannot be held exactly/);
+    expect(codec.parse('{"h":{"n":9007199254740992}}').h.n).toBe(9007199254740992);
+    expect(codec.parse('{"h":{"n":1152921504606846976}}').h.n).toBe(2 ** 60);
+  });
+  it("refuses a lone-surrogate hash key", async () => {
+    const codec = await hashCodec();
+    expect(() => codec.parse('{"h":{"\\ud800":1}}')).toThrow(/not valid Unicode/);
+  });
+  it("refuses integer-like keys that JS would reorder, keeps ascending ones", async () => {
+    const codec = await hashCodec();
+    expect(() => codec.parse('{"h":{"b":1,"2":2,"a":3,"1":4}}')).toThrow(/key order cannot be preserved/);
+    expect(() => codec.parse('{"h":{"2":1,"1":2}}')).toThrow(/key order cannot be preserved/);
+    expect(codec.stringify(codec.parse('{"h":{"1":4,"2":2,"b":1,"a":3}}'))).toBe('{"h":{"1":4,"2":2,"b":1,"a":3}}');
+    expect(codec.stringify(codec.parse('{"h":{"01":1,"b":2,"-1":3}}'))).toBe('{"h":{"01":1,"b":2,"-1":3}}');
+  });
+});

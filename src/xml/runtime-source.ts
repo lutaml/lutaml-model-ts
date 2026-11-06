@@ -607,8 +607,46 @@ function refuseDuplicateAttributes(text: string): void {
   }
 }
 
-const NON_REFERENCE_MARKUP = /<!--[\s\S]*?-->|<!\[CDATA\[[\s\S]*?\]\]>|<\?[\s\S]*?\?>/g;
-const CHAR_REFERENCE = /&#(?:x([0-9a-fA-F]+)|([0-9]+));/g;
+const CHAR_REFERENCE = /&#(?:[xX]([0-9a-fA-F]+)|([0-9]+));/g;
+
+/**
+ * Splits text the way the parser does, into the spans where a reference is read
+ * (character data and attribute values; comments, CDATA and PIs are skipped).
+ * A literal '<' inside a quoted attribute value is malformed XML that moxml-ts
+ * accepts; it would let a comment-lookalike span hide references, so it is refused.
+ */
+function referenceSpans(text: string): string[] {
+  const spans: string[] = [];
+  let pos = 0;
+  while (pos < text.length) {
+    const lt = text.indexOf("<", pos);
+    if (lt < 0) {
+      spans.push(text.slice(pos));
+      break;
+    }
+    spans.push(text.slice(pos, lt));
+    const skip = text.startsWith("<!--", lt) ? "-->" : text.startsWith("<![CDATA[", lt) ? "]]>" : text.startsWith("<?", lt) ? "?>" : null;
+    if (skip !== null) {
+      const end = text.indexOf(skip, lt + 2);
+      if (end < 0) break;
+      pos = end + skip.length;
+      continue;
+    }
+    let i = lt + 1;
+    let quote = "";
+    for (; i < text.length; i++) {
+      const ch = text[i] as string;
+      if (quote !== "") {
+        if (ch === quote) quote = "";
+        else if (ch === "<") xmlFail("'<' is not allowed in an attribute value", "/input");
+      } else if (ch === '"' || ch === "'") quote = ch;
+      else if (ch === ">") break;
+    }
+    spans.push(text.slice(lt, i + 1));
+    pos = i + 1;
+  }
+  return spans;
+}
 
 /** XML 1.0 Char: #x9 | #xA | #xD | [#x20-#xD7FF] | [#xE000-#xFFFD] | [#x10000-#x10FFFF]. */
 function isXmlChar(code: number): boolean {
@@ -618,10 +656,12 @@ function isXmlChar(code: number): boolean {
 
 /** The parser silently drops or replaces a reference outside Char (&#x0;, &#xD800;, &#1114112;); refuse it. */
 function refuseInvalidCharReferences(text: string): void {
-  for (const m of text.replace(NON_REFERENCE_MARKUP, "").matchAll(CHAR_REFERENCE)) {
-    const digits = (m[1] ?? m[2] ?? "").replace(/^0+(?=.)/, "");
-    const code = digits.length > 8 ? Infinity : m[1] !== undefined ? parseInt(digits, 16) : parseInt(digits, 10);
-    if (!isXmlChar(code)) xmlFail("character reference " + m[0] + " is not an XML character", "/input");
+  for (const span of referenceSpans(text)) {
+    for (const m of span.matchAll(CHAR_REFERENCE)) {
+      const digits = (m[1] ?? m[2] ?? "").replace(/^0+(?=.)/, "");
+      const code = digits.length > 8 ? Infinity : m[1] !== undefined ? parseInt(digits, 16) : parseInt(digits, 10);
+      if (!isXmlChar(code)) xmlFail("character reference " + m[0] + " is not an XML character", "/input");
+    }
   }
 }
 
