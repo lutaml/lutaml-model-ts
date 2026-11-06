@@ -71,12 +71,17 @@ export function packageVersion(): string {
   return cachedVersion;
 }
 
-function dependencyPins(bindings: Bindings, version: string): Manifest["dependencies"] {
+function dependencyPins(bindings: Bindings, version: string, sources: SourceMap): Manifest["dependencies"] {
   const pins = new Map<string, { revision: string; sha256: Checksum }>();
-  // The generated code imports lutaml-model-ts; pin the declared name@version.
+  // The generated code embeds the lutaml-model-ts runtime; the pin covers the
+  // emitted runtime bytes (every runtime.ts), not just the name and version.
+  const runtime: { [path: string]: string } = {};
+  for (const path of [...sources.keys()].sort(compareBytes)) {
+    if (path === "runtime.ts" || path.endsWith("/runtime.ts")) runtime[path] = sha256Of(sources.get(path) as string);
+  }
   pins.set("lutaml-model-ts", {
     revision: version,
-    sha256: sha256Of(canonicalManifestJson({ name: "lutaml-model-ts", revision: version })),
+    sha256: sha256Of(canonicalManifestJson({ name: "lutaml-model-ts", revision: version, runtime })),
   });
   const byModule = new Map<string, { [key: string]: Plain }>();
   const add = (key: string, binding: { module: string; export: string }): void => {
@@ -115,7 +120,7 @@ export function generateArtifacts(input: ArtifactInput): ArtifactSet {
     capabilities: formats,
     corpora: [],
     files: [...sources.keys()].sort(compareBytes).map((path) => ({ path, sha256: sha256Of(sources.get(path) as string) })),
-    dependencies: dependencyPins(input.bindings, version),
+    dependencies: dependencyPins(input.bindings, version, sources),
   };
   const manifestJson = canonicalManifestJson(manifest as unknown as Plain);
   const manifestSha256 = sha256Of(manifestJson);

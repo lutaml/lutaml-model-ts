@@ -1,12 +1,14 @@
 #!/usr/bin/env node
-import { lstatSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { LmlError } from "./contracts.js";
 import type { Bindings, SchemaFormat } from "./contracts.js";
 import { generateArtifacts, staleFiles } from "./artifacts/index.js";
+import { bundleChecksum, loadBundle } from "./lml/index.js";
 import type { KeyValueFormat } from "./codecs/index.js";
 import { checkDocumentVersion } from "./version.js";
+import { MANIFEST_FILES, listArtifactFiles, verifyArtifacts, verifyBundleChecksum } from "./lml/verify.js";
 
 const USAGE = `usage: lutaml-model-ts <command>
 
@@ -17,7 +19,11 @@ commands:
                               write TypeScript models, codecs and manifest.json
       --format json|yaml      key-value codec family (repeatable; default json)
       --bindings <file.json>  trusted value-type bindings ({"types": {...}})
-      --check                 write nothing; exit 1 if <dir> is missing or stale
+      --check                 write nothing; exit 1 if <dir> is missing, stale or holds extra files
+  verify bundle <bundle> --expected-sha256 <sha256:...>
+                              exit 1 (checksum_mismatch) unless the bundle's checksum equals the pin
+  verify artifacts <dir> --expected-sha256 <sha256:...> [--bundle <bundle>]
+                              check manifest digest, every listed file and that no file is extra or missing
 `;
 
 interface GenerateArgs {
@@ -126,12 +132,16 @@ function generate(args: readonly string[]): number {
   const root = resolve(parsed.out);
   if (parsed.check) {
     const report = staleFiles(result.files, (path) => readOptional(root, path));
-    if (report.missing.length === 0 && report.changed.length === 0) {
+    const extra = existsSync(root)
+      ? [...listArtifactFiles(root).files, ...listArtifactFiles(root).symlinks].filter((p) => !result.files.has(p) && !MANIFEST_FILES.includes(p)).sort()
+      : [];
+    if (report.missing.length === 0 && report.changed.length === 0 && extra.length === 0) {
       process.stdout.write(`up to date: ${result.manifestSha256}\n`);
       return 0;
     }
     for (const path of report.missing) process.stderr.write(`missing: ${path}\n`);
     for (const path of report.changed) process.stderr.write(`stale: ${path}\n`);
+    for (const path of extra) process.stderr.write(`extra: ${path}\n`);
     return 1;
   }
   mkdirSync(root, { recursive: true });
@@ -142,6 +152,35 @@ function generate(args: readonly string[]): number {
   for (const { target, text } of targets) writeFileSync(target, text, "utf8");
   process.stdout.write(`${result.manifestSha256}\n`);
   return 0;
+}
+
+function verify(args: readonly string[]): number {
+  const [what, subject, ...rest] = args;
+  if ((what !== "bundle" && what !== "artifacts") || subject === undefined) throw new UsageError("verify bundle|artifacts <path> --expected-sha256 <digest>");
+  let expected: string | undefined;
+  let bundle: string | undefined;
+  for (let i = 0; i < rest.length; i += 1) {
+    const arg = rest[i] as string;
+    const next = rest[i + 1];
+    if (arg === "--expected-sha256" && next !== undefined) expected = next;
+    else if (arg === "--bundle" && what === "artifacts" && next !== undefined) bundle = next;
+    else throw new UsageError(`unexpected argument ${arg}`);
+    i += 1;
+  }
+  if (expected === undefined) throw new UsageError("missing --expected-sha256");
+  if (what === "bundle") {
+    verifyBundleChecksum(readFileSync(subject), schemaFormat(subject), expected);
+    process.stdout.write(`ok: ${expected}\n`);
+    return 0;
+  }
+  const lmlChecksum = bundle === undefined ? undefined : verifyBundleSelf(bundle);
+  verifyArtifacts({ root: subject, expectedSha256: expected, ...(lmlChecksum === undefined ? {} : { lmlChecksum }) });
+  process.stdout.write(`ok: ${expected}\n`);
+  return 0;
+}
+
+function verifyBundleSelf(path: string): string {
+  return bundleChecksum(loadBundle(readFileSync(path), schemaFormat(path)));
 }
 
 export function run(argv: readonly string[]): number {
@@ -162,6 +201,8 @@ export function run(argv: readonly string[]): number {
       }
       case "generate":
         return generate(argv.slice(1));
+      case "verify":
+        return verify(argv.slice(1));
       default:
         process.stderr.write(USAGE);
         return 2;
