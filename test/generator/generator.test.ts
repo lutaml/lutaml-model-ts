@@ -292,6 +292,25 @@ describe("generateModels: rejections", () => {
     expect(codeOf(() => generateModels(withType("complex"), STUB_BINDINGS))).toBe("unknown_type");
   });
 
+  it("generates every builtin name Ruby's exporter writes", () => {
+    const withType = (name: string): Bundle =>
+      mutate(rich, (d) => {
+        const attr = d.models["Shop::Circle@default"]?.attributes[0] as { type: unknown; default?: unknown };
+        attr.type = { kind: "builtin", name };
+        attr.default = { present: false };
+      });
+    const stringLike = [
+      "email_address", "ip_v4_address", "ip_v6_address", "uuid", "reference", "uri_reference",
+      "date_with_timezone", "date_time_with_timezone", "day_time_duration", "year_month_duration",
+    ];
+    for (const name of [...stringLike, "positive_integer", "non_negative_integer"]) {
+      expect(() => generateModels(withType(name), STUB_BINDINGS), name).not.toThrow();
+    }
+    const source = (name: string): string => [...generateModels(withType(name), STUB_BINDINGS).values()].join("\n");
+    expect(source("positive_integer")).toContain("bigint");
+    expect(source("uuid")).toContain("string");
+  });
+
   it("rejects dangling references and unknown discriminator targets", () => {
     const dangling = mutate(rich, (d) => {
       const attr = d.models["Shop::Bundle@default"]?.attributes[1] as { type: unknown };
