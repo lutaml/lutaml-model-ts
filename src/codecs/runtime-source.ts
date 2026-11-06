@@ -1,3 +1,5 @@
+import { floatRuntimeSource } from "./float-source.js";
+
 /**
  * Source text of the generated `<format>/runtime.ts`: small fixed wire
  * helpers shared by every generated codec. It is static code, not a
@@ -7,7 +9,7 @@
  */
 export function codecRuntimeSource(contractsModule: string, format: "json" | "yaml"): string {
   return RUNTIME_HEAD.replaceAll("@@CONTRACTS@@", JSON.stringify(contractsModule)) +
-    RUNTIME_BODY.replaceAll("@@FORMAT@@", JSON.stringify(format)) +
+    RUNTIME_BODY.replaceAll("@@FORMAT@@", JSON.stringify(format)).replace("@@FLOAT@@", () => floatRuntimeSource()) +
     (format === "json" ? JSON_TAIL : YAML_TAIL);
 }
 
@@ -123,23 +125,7 @@ export function eBool(x: boolean): boolean {
 
 const INTEGER_LEXICAL = /^[+-]?[0-9]+$/;
 
-const FLOAT_WIRE = /^-?[0-9]+\.[0-9]+(?:e-?[0-9]+)?$/;
-
-/** Ruby-compatible shortest round-trip spelling: lowercase e, no +, no leading zeros, fraction digit always. */
-function floatText(value: number): string {
-  if (value === 0) return Object.is(value, -0) ? "-0.0" : "0.0";
-  const [mantissa = "", exp = "0"] = Math.abs(value).toExponential().split("e");
-  const digits = mantissa.replace(".", "");
-  const decpt = Number(exp) + 1;
-  const sign = value < 0 ? "-" : "";
-  if (decpt > -4 && decpt <= 15) {
-    if (decpt <= 0) return sign + "0." + "0".repeat(-decpt) + digits;
-    if (decpt >= digits.length) return sign + digits + "0".repeat(decpt - digits.length) + ".0";
-    return sign + digits.slice(0, decpt) + "." + digits.slice(decpt);
-  }
-  return sign + digits[0] + "." + (digits.length > 1 ? digits.slice(1) : "0") + "e" + (decpt - 1);
-}
-
+@@FLOAT@@
 /** Exact integers travel as decimal strings; JSON numbers are refused. */
 export function dInt(v: unknown): bigint {
   if (typeof v === "number") return wireFail("integers are exact decimal strings; a JSON number is refused");
@@ -156,13 +142,13 @@ export function dFloat(v: unknown): number {
   if (typeof v === "number") return wireFail("floats are canonical strings; a JSON number is refused");
   if (typeof v !== "string" || !FLOAT_WIRE.test(v)) return wireFail("expected a canonical float string");
   const n = Number(v);
-  if (!Number.isFinite(n) || floatText(n) !== v) return wireFail("float string is not in canonical form");
+  if (!canonicalFloat(v)) return wireFail("float string is not in canonical form");
   return n;
 }
 
 export function eFloat(x: number): string {
   if (typeof x !== "number" || !Number.isFinite(x)) return wireFail("a non-finite float has no wire form", "not_serializable");
-  return floatText(x);
+  return floatWire(x);
 }
 
 /** A bound exact/custom type: a lexical string through its trusted parser. */
@@ -259,6 +245,7 @@ export function eHex(x: Uint8Array): string {
 }
 
 function neutral(v: unknown, depth: number): void {
+  if (v instanceof InexactNumber) return wireFail("number " + v.text + " cannot be held exactly");
   if (depth > 200) return wireFail("neutral value is nested too deeply");
   if (v === null || typeof v === "boolean") return;
   if (typeof v === "string") {
@@ -275,6 +262,11 @@ function neutral(v: unknown, depth: number): void {
   }
   const o = object(v);
   for (const key of Object.keys(o)) at(key, () => neutral(o[key], depth + 1));
+}
+
+/** A JSON number a JS number cannot hold exactly; produced by the strict JSON reader, refused by every decoder. */
+class InexactNumber {
+  constructor(readonly text: string) {}
 }
 
 export function dHash(v: unknown): Rec {
@@ -295,6 +287,7 @@ export function isPlain(v: unknown): v is Rec {
 }
 
 export function object(v: unknown): Rec {
+  if (v instanceof InexactNumber) return wireFail("number " + v.text + " cannot be held exactly");
   return isPlain(v) ? v : wireFail("expected an object");
 }
 
@@ -449,6 +442,117 @@ export function keyString(wire: unknown): string {
 `;
 
 const JSON_TAIL = String.raw`
+const JSON_NUMBER = /-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?/y;
+const JSON_ESCAPES: Readonly<Record<string, string>> = {
+  '"': '"', "\\": "\\", "/": "/", b: "\b", f: "\f", n: "\n", r: "\r", t: "\t",
+};
+const JSON_MAX_DEPTH = 512;
+
+/**
+ * Strict RFC 8259 reader for the data codec. Unlike JSON.parse it refuses a
+ * repeated object key, and refuses a number it cannot hold exactly (an
+ * integer beyond 2^53, 1.0 / 1e2 / -0, whose int-versus-float spelling a JS
+ * number loses) instead of silently rounding: it becomes an InexactNumber
+ * marker that every decoder refuses at its own location. Same rules as the bundle reader
+ * (src/lml/raw.ts), but yielding plain objects (own properties only).
+ */
+function strictJson(src: string): unknown {
+  let pos = 0;
+  const bad = (message: string): never => wireFail("json: " + message + " at offset " + pos);
+  const space = (): void => {
+    while (pos < src.length && " \t\n\r".includes(src[pos] as string)) pos++;
+  };
+  const text = (): string => {
+    pos++;
+    let out = "";
+    for (;;) {
+      const ch = src[pos++];
+      if (ch === undefined) return bad("unterminated string");
+      if (ch === '"') return out;
+      if (ch < " ") return bad("control character in string");
+      if (ch !== "\\") {
+        out += ch;
+        continue;
+      }
+      const esc = src[pos++];
+      if (esc === "u") {
+        const hex = src.slice(pos, pos + 4);
+        if (!/^[0-9a-fA-F]{4}$/.test(hex)) return bad("bad unicode escape");
+        out += String.fromCharCode(parseInt(hex, 16));
+        pos += 4;
+      } else if (esc !== undefined && Object.hasOwn(JSON_ESCAPES, esc)) {
+        out += JSON_ESCAPES[esc];
+      } else {
+        return bad("bad escape");
+      }
+    }
+  };
+  const number = (): number | InexactNumber => {
+    JSON_NUMBER.lastIndex = pos;
+    const m = JSON_NUMBER.exec(src);
+    if (m === null) return bad("unexpected character");
+    pos += m[0].length;
+    const n = Number(m[0]);
+    if (!Number.isFinite(n)) return bad("number " + m[0] + " is not finite");
+    if (String(n) !== m[0]) return new InexactNumber(m[0]);
+    return n;
+  };
+  const value = (depth: number): unknown => {
+    if (depth > JSON_MAX_DEPTH) return bad("document is nested too deeply");
+    space();
+    const ch = src[pos];
+    if (ch === "[") {
+      pos++;
+      const items: unknown[] = [];
+      space();
+      if (src[pos] === "]") {
+        pos++;
+        return items;
+      }
+      for (;;) {
+        items.push(value(depth + 1));
+        space();
+        const next = src[pos++];
+        if (next === "]") return items;
+        if (next !== ",") return bad("expected , or ]");
+      }
+    }
+    if (ch === "{") {
+      pos++;
+      const members: Record<string, unknown> = {};
+      space();
+      if (src[pos] === "}") {
+        pos++;
+        return members;
+      }
+      for (;;) {
+        space();
+        if (src[pos] !== '"') return bad("expected a string key");
+        const key = text();
+        space();
+        if (src[pos++] !== ":") return bad("expected :");
+        if (Object.hasOwn(members, key)) return wireFail("duplicate key " + JSON.stringify(key));
+        setOwn(members, key, value(depth + 1));
+        space();
+        const next = src[pos++];
+        if (next === "}") return members;
+        if (next !== ",") return bad("expected , or }");
+      }
+    }
+    if (ch === '"') return text();
+    for (const [word, found] of [["true", true], ["false", false], ["null", null]] as const) {
+      if (src.startsWith(word, pos)) {
+        pos += word.length;
+        return found;
+      }
+    }
+    return number();
+  };
+  const root = value(0);
+  space();
+  if (pos !== src.length) return bad("unexpected trailing characters");
+  return root;
+}
 export interface JsonCodec<T> {
   readonly modelId: string;
   readonly format: "json";
@@ -477,7 +581,7 @@ export function jsonCodec<T>(
     parse(text) {
       let tree: unknown;
       try {
-        tree = JSON.parse(text) as unknown;
+        tree = strictJson(text);
       } catch (error) {
         throw new LmlError({
           reason: "invalid_document",

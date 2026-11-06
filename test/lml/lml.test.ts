@@ -328,8 +328,11 @@ describe("untrusted input", () => {
     expect(v1.canonicalJson).toBe('{"lml":1,"model":"M","attributes":[{"name":"a","default":1.0}],"mappings":{}}');
   });
 
-  it("does not coerce YAML 1.1 booleans or timestamps", () => {
-    const loaded = load(`${head.replace("attributes: []", "attributes:\n  - {name: a, type: {kind: builtin, name: string}, default: {present: true, value: yes}}\n  - {name: b, type: {kind: builtin, name: string}, default: {present: true, value: 2020-01-01}}")}`) as any;
+  it("refuses plain YAML 1.1 booleans or timestamps, keeps quoted ones as strings", () => {
+    const doc = (a: string, b: string) => `${head.replace("attributes: []", `attributes:\n  - {name: a, type: {kind: builtin, name: string}, default: {present: true, value: ${a}}}\n  - {name: b, type: {kind: builtin, name: string}, default: {present: true, value: ${b}}}`)}`;
+    expect(() => load(doc("yes", "'x'"))).toThrow(/read differently by YAML 1.1/);
+    expect(() => load(doc("'x'", "2020-01-01"))).toThrow(/read differently by YAML 1.1/);
+    const loaded = load(doc("'yes'", "'2020-01-01'")) as any;
     expect(loaded.document.attributes[0].default.value).toBe("yes");
     expect(loaded.document.attributes[1].default.value).toBe("2020-01-01");
   });

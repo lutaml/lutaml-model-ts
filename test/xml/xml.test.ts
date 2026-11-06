@@ -239,6 +239,20 @@ describe.skipIf(!available)("generated XML codecs (moxml-ts)", () => {
       expect(info).toMatchObject({ reason: "invalid_document", model_id: "XmlOracle::Person@default", format: "xml", location: "/input" });
     });
 
+    for (const ref of ["&#x0;", "&#x1;", "&#xD800;", "&#1114112;", "&#xFFFE;", "&#99999999999999999999;"]) {
+      it(`refuses the character reference ${ref} (outside the XML Char range)`, async () => {
+        const info = await infoOf(() => mod["xml"].CODECS["XmlOracle::Plain@default"].parse(`<plain><v>a${ref}b</v></plain>`));
+        expect(info?.reason).toBe("invalid_document");
+        expect(info?.detail).toMatch(/character reference/);
+      });
+    }
+
+    it("still reads valid references and an invalid-looking one inside CDATA or a comment", async () => {
+      const codec = mod["xml"].CODECS["XmlOracle::Plain@default"];
+      expect((await codec.parse("<plain><v>&#x9;&#65;&#x1F600;</v></plain>")).v).toBe("\tA\u{1F600}");
+      expect((await codec.parse("<plain><!-- &#x0; --><v><![CDATA[&#x0;]]></v></plain>")).v).toBe("&#x0;");
+    });
+
     it("refuses a DOCTYPE before the parser sees it", async () => {
       const info = await infoOf(() => mod["xml"].CODECS["XmlOracle::Plain@default"].parse('<!DOCTYPE plain [<!ENTITY e "x">]><plain/>'));
       expect(info?.reason).toBe("invalid_document");
