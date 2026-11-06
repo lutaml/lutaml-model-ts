@@ -13,7 +13,7 @@ export const PIN = {
   package: "moxml-ts",
   version: "0.1.0",
   // lutaml/moxml-ts#9 (draft) head; the repo's package-lock.json must resolve to it.
-  commit: "78801e0641cbaf5e5feb3a651446b72c01b70d0a",
+  commit: "70adba65582795fc29bc5404c0773c1eede6c312",
   // First 16 hex chars of the sha256 of the vendored wasm bundles (no .pin files ship in the install).
   leptrisWasm: "b85b0256a3885448",
   moxmlWasm: "87bed5fe83f5d7e8",

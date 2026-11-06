@@ -7,7 +7,7 @@ Exit codes: 0 all observations match, 1 drift, 2 moxml-ts not installed
 
 ## Pin and install
 
-- `lutaml/moxml-ts` draft PR #9 head `78801e0641cbaf5e5feb3a651446b72c01b70d0a` (package version 0.1.0),
+- `lutaml/moxml-ts` draft PR #9 head `70adba65582795fc29bc5404c0773c1eede6c312` (package version 0.1.0),
   a git dependency in `package.json`; `npm ci` runs its `prepare` script (fetches the wasm bundles and builds
   `dist/`). The probe checks the version, the locked commit and a sha256 prefix of each vendored wasm bundle.
 - Not on npm. When it is not installed the probe exits 2 with `MOXML_TS_UNAVAILABLE` and the vitest cases skip.
