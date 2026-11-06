@@ -307,21 +307,20 @@ function defaultSpec(node: Tree | undefined, at: string, id: string, attribute: 
   }
 }
 
-// Builtin types whose present default must be a JSON integer / boolean / string /
-// object. Mirrors Ruby DocumentValidator#typed_default (and the exporter's portable_scalar).
-const INTEGER_DEFAULT_TYPES = new Set(["integer"]);
-const BOOLEAN_DEFAULT_TYPES = new Set(["boolean"]);
-const STRING_DEFAULT_TYPES = new Set(["string", "token", "uri", "email", "hostname", "ip", "decimal",
-  "rational", "date", "time", "date_time", "time_without_date", "duration", "qname", "base64_binary",
-  "hex_binary", "symbol"]);
-
+// The one JSON shape a present default takes for a builtin type, identical to Ruby
+// DocumentValidator.default_shape? (and the exporter's portable_scalar): integer is a
+// JSON integer, boolean a JSON boolean, hash an object, every other builtin (decimal,
+// rational, date, qname, ...) its string spelling. float has its own canonical-string
+// rule (floatDefault); a non-builtin kind is not shape-checked.
 function defaultShape(kind: string, item: Tree | undefined): boolean {
-  if (item === null || item === undefined) return true;
-  if (INTEGER_DEFAULT_TYPES.has(kind)) return typeof item === "number" && Number.isInteger(item);
-  if (BOOLEAN_DEFAULT_TYPES.has(kind)) return typeof item === "boolean";
-  if (STRING_DEFAULT_TYPES.has(kind)) return typeof item === "string";
-  if (kind === "hash") return isObj(item);
-  return true;
+  if (item === null || item === undefined || !BUILTIN_TYPES.includes(kind)) return true;
+  switch (kind) {
+    case "integer": return typeof item === "number" && Number.isInteger(item);
+    case "boolean": return typeof item === "boolean";
+    case "hash": return isObj(item);
+    case "float": return true;
+    default: return typeof item === "string";
+  }
 }
 
 /** A present default on a builtin type matches that type (collection items each). */
