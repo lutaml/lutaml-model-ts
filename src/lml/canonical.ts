@@ -8,7 +8,7 @@ type Node = Raw | Tree | undefined;
 
 /**
  * Ruby JSON.generate float text (json 3.x: fixed notation for decimal point
- * positions -8..15, otherwise `d[.ddd]e+XX`). v1 documents only.
+ * positions -8..15 plus 16 when the shortest digits are 17 long, otherwise `d[.ddd]e+XX`). v1 documents only.
  */
 export function rubyFloat(value: number): string {
   if (!Number.isFinite(value)) {
@@ -19,7 +19,7 @@ export function rubyFloat(value: number): string {
   const digits = mantissa.replace(".", "");
   const decpt = Number(exp) + 1;
   const sign = value < 0 ? "-" : "";
-  if (decpt >= -8 && decpt <= 15) {
+  if (decpt >= -8 && (decpt <= 15 || (decpt === 16 && digits.length === 17))) {
     if (decpt <= 0) return `${sign}0.${"0".repeat(-decpt)}${digits}`;
     if (decpt >= digits.length) return `${sign}${digits}${"0".repeat(decpt - digits.length)}.0`;
     return `${sign}${digits.slice(0, decpt)}.${digits.slice(decpt)}`;
