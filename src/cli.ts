@@ -8,7 +8,7 @@ import { generateArtifacts, staleFiles } from "./artifacts/index.js";
 import { bundleChecksum, loadBundle } from "./lml/index.js";
 import type { KeyValueFormat } from "./codecs/index.js";
 import { checkDocumentVersion } from "./version.js";
-import { MANIFEST_FILES, listArtifactFiles, verifyArtifacts, verifyBundleChecksum } from "./lml/verify.js";
+import { listArtifactFiles, unlistedEntries, verifyArtifacts, verifyBundleChecksum } from "./lml/verify.js";
 
 const USAGE = `usage: lutaml-model-ts <command>
 
@@ -70,8 +70,10 @@ function schemaFormat(path: string): SchemaFormat {
   return /\.ya?ml$/i.test(path) ? "yaml" : "json";
 }
 
+/** Generated file content, undefined when absent; anything that is not a regular file reads as a mismatch, never opened. */
 function readOptional(root: string, path: string): string | undefined {
   try {
+    if (!lstatSync(join(root, path)).isFile()) return "\0not a regular file";
     return readFileSync(join(root, path), "utf8");
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
@@ -132,9 +134,7 @@ function generate(args: readonly string[]): number {
   const root = resolve(parsed.out);
   if (parsed.check) {
     const report = staleFiles(result.files, (path) => readOptional(root, path));
-    const extra = existsSync(root)
-      ? [...listArtifactFiles(root).files, ...listArtifactFiles(root).symlinks].filter((p) => !result.files.has(p) && !MANIFEST_FILES.includes(p)).sort()
-      : [];
+    const extra = existsSync(root) ? unlistedEntries(listArtifactFiles(root), (p) => result.files.has(p)) : [];
     if (report.missing.length === 0 && report.changed.length === 0 && extra.length === 0) {
       process.stdout.write(`up to date: ${result.manifestSha256}\n`);
       return 0;
