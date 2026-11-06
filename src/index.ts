@@ -18,3 +18,5 @@ export { createKeyValueEmitter, generateJsonCodecs, jsonEmitter, yamlEmitter } f
 export type { CodecOptions, KeyValueFormat } from "./codecs/index.js";
 export { canonicalManifestJson, generateArtifacts, sha256Of, staleFiles } from "./artifacts/index.js";
 export type { ArtifactInput, ArtifactSet, StaleReport } from "./artifacts/index.js";
+export { listArtifactFiles, manifestChecksum, verifyArtifacts, verifyBundleChecksum } from "./lml/verify.js";
+export type { VerifyArtifactsOptions } from "./lml/verify.js";
