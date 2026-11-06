@@ -32,7 +32,12 @@ export interface BoundImport {
   parse: boolean;
 }
 
-const STRING_FAMILY = new Set(["string", "token", "uri", "email", "hostname", "ip", "symbol"]);
+const STRING_FAMILY = new Set([
+  "string", "token", "uri", "email", "hostname", "ip", "symbol",
+  "email_address", "ip_v4_address", "ip_v6_address", "uuid", "reference", "uri_reference", "date_with_timezone", "date_time_with_timezone", "day_time_duration", "year_month_duration",
+]);
+/** Integer-like builtins; the contract defines no bounds for the positive/non-negative names. */
+const INTEGER_FAMILY = new Set(["integer", "positive_integer", "non_negative_integer"]);
 const LEXICAL_CHECKS: Readonly<Record<string, string>> = {
   date: "rt.date",
   date_time: "rt.dateTime",
@@ -43,7 +48,7 @@ const LEXICAL_CHECKS: Readonly<Record<string, string>> = {
 const EXACT_BUILTINS = new Set(["decimal", "rational"]);
 const KNOWN_BUILTINS = new Set([
   ...STRING_FAMILY, ...Object.keys(LEXICAL_CHECKS), ...EXACT_BUILTINS,
-  "boolean", "integer", "float", "qname", "base64_binary", "hex_binary", "hash",
+  "boolean", ...INTEGER_FAMILY, "float", "qname", "base64_binary", "hex_binary", "hash",
 ]);
 const UNSUPPORTED_BUILTINS = new Set(["double"]);
 const STRING_FACETS: Readonly<Record<string, string>> = {
@@ -146,6 +151,8 @@ export class PlanContext {
           literal: (v, reject) => (typeof v === "boolean" ? String(v) : reject("expected a boolean")),
         };
       case "integer":
+      case "positive_integer":
+      case "non_negative_integer":
         return { ts: "bigint", check: "rt.int", literal: (v, reject) => integerLiteral(v, reject) };
       case "float":
         return { ts: "number", check: "rt.float", literal: floatLiteral };
@@ -213,7 +220,7 @@ export class PlanContext {
     const badFacet = (facet: string, why: string): never =>
       fail({ reason: "invalid_document", model_id: modelId, attribute, detail: `value type ${id}: facet ${facet} ${why}` });
     const stringy = STRING_FAMILY.has(baseName);
-    const integer = baseName === "integer";
+    const integer = INTEGER_FAMILY.has(baseName);
     const parts: string[] = [];
     let enumeration: NeutralValue | undefined;
     for (const name of names) {

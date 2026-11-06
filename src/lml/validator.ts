@@ -15,7 +15,11 @@ export const BUILTIN_TYPES: readonly string[] = [
   "string", "token", "uri", "email", "hostname", "ip", "boolean", "integer",
   "decimal", "float", "rational", "date", "time", "date_time", "time_without_date",
   "duration", "qname", "base64_binary", "hex_binary", "symbol", "hash",
+  "email_address", "ip_v4_address", "ip_v6_address", "uuid", "reference", "uri_reference", "date_with_timezone", "date_time_with_timezone", "day_time_duration", "year_month_duration",
+  "positive_integer", "non_negative_integer",
 ];
+/** Builtins whose present default is a JSON integer (Ruby DocumentValidator::INTEGER_TYPES). */
+const INTEGER_TYPES: readonly string[] = ["integer", "positive_integer", "non_negative_integer"];
 const UNSUPPORTED_BUILTINS = ["double"];
 export const FORMATS: readonly string[] = ["xml", "json", "yaml", "toml"];
 const NAMESPACE_MODES = ["inherit", "unqualified", "uri"];
@@ -314,8 +318,8 @@ function defaultSpec(node: Tree | undefined, at: string, id: string, attribute: 
 // rule (floatDefault); a non-builtin kind is not shape-checked.
 function defaultShape(kind: string, item: Tree | undefined): boolean {
   if (item === null || item === undefined || !BUILTIN_TYPES.includes(kind)) return true;
+  if (INTEGER_TYPES.includes(kind)) return typeof item === "number" && Number.isInteger(item);
   switch (kind) {
-    case "integer": return typeof item === "number" && Number.isInteger(item);
     case "boolean": return typeof item === "boolean";
     case "hash": return isObj(item);
     case "float": return true;

@@ -211,7 +211,7 @@ describe("model errors (mirrors the Ruby validator spec)", () => {
 
   it("uses only the agreed error codes", () => {
     expect(ERROR_CODES).toHaveLength(21);
-    expect(BUILTIN_TYPES).toHaveLength(21);
+    expect(BUILTIN_TYPES).toHaveLength(33);
     expect(FORMATS).toEqual(["xml", "json", "yaml", "toml"]);
   });
 });
