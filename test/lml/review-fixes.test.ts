@@ -82,3 +82,13 @@ describe("round 3 N1/N7: YAML scalars Psych types differently", () => {
     expect(read(`k: ${text}`).get("k")).toBe(text);
   });
 });
+
+describe("round 4: lone surrogates in LML documents", () => {
+  const raw = (text: string, f: "json" | "yaml") => parseRaw(new TextEncoder().encode(text), f);
+  it.each([['{"k":"\\ud800"}', "json"], ['{"\\udc00":1}', "json"], ['k: "\\ud800"\n', "yaml"], ['"\\udc00": 1\n', "yaml"]] as const)("refuses %s (%s)", (text, f) => {
+    expect(() => raw(text, f)).toThrow(/not valid Unicode|lone surrogate/);
+  });
+  it("accepts a valid surrogate pair", () => {
+    expect((raw('{"k":"\\ud83d\\ude00"}', "json") as ReadonlyMap<string, unknown>).get("k")).toBe("\u{1F600}");
+  });
+});

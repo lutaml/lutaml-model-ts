@@ -76,3 +76,21 @@ describe("round 3: strict JSON reader exactness, hash keys and order", () => {
     expect(codec.stringify(codec.parse('{"h":{"01":1,"b":2,"-1":3}}'))).toBe('{"h":{"01":1,"b":2,"-1":3}}');
   });
 });
+
+describe("round 4: lone surrogates are refused like Ruby's JSON and Psych", () => {
+  const strCodecs = async () =>
+    generated(bundleOf([attr("s", "string")], {}, { mappings: { json: { rules: [{ key: ["s"], to: "s" }] }, yaml: { rules: [{ key: ["s"], to: "s" }] } } }), { json: true, yaml: true });
+  it("refuses a lone surrogate in a JSON string value, keeps a valid pair", async () => {
+    const { json } = await strCodecs();
+    const codec = json?.["CODECS"]["A@default"];
+    for (const s of ["\\ud800", "\\udc00", "a\\ud800b", "\\udc00\\ud800"]) expect(() => codec.parse(`{"s":"${s}"}`), s).toThrow(/not valid Unicode/);
+    expect(codec.parse('{"s":"\\ud83d\\ude00"}').s).toBe("\u{1F600}");
+  });
+  it("refuses a lone surrogate in a YAML string value, keeps a valid pair", async () => {
+    const { yaml } = await strCodecs();
+    const codec = yaml?.["CODECS"]["A@default"];
+    const YAML = await import("yaml");
+    expect(() => codec.parse('s: "\\ud800"\n', YAML)).toThrow(/not valid Unicode/);
+    expect(codec.parse('s: "\\U0001F600"\n', YAML).s).toBe("\u{1F600}");
+  });
+});

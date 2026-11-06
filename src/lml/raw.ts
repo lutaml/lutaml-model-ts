@@ -67,6 +67,9 @@ export interface ParseOptions {
  * Strict RFC 8259 parser into insertion-ordered maps. JSON.parse cannot be
  * used: it reorders integer-like keys and hides 1 versus 1.0.
  */
+/** A UTF-16 surrogate with no partner: Ruby's JSON and Psych both refuse it, and it has no UTF-8 spelling. */
+const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+
 class JsonParser {
   private pos = 0;
   constructor(private readonly src: string, private readonly options: ParseOptions = {}) {}
@@ -122,7 +125,10 @@ class JsonParser {
     for (;;) {
       const ch = this.src[this.pos++];
       if (ch === undefined) this.error("unterminated string");
-      if (ch === '"') return out;
+      if (ch === '"') {
+        if (LONE_SURROGATE.test(out)) this.error("string is not valid Unicode (lone surrogate)");
+        return out;
+      }
       if (ch < " ") this.error("control character in string");
       if (ch !== "\\") {
         out += ch;
@@ -266,6 +272,7 @@ function nodeToRaw(node: unknown): Raw {
 }
 
 function scalarToRaw(value: unknown): Raw {
+  if (typeof value === "string" && LONE_SURROGATE.test(value)) return fail("invalid_document", "YAML: string is not valid Unicode (lone surrogate)", "");
   if (value === null || typeof value === "boolean" || typeof value === "string") return value;
   if (typeof value === "bigint") return intValue(value);
   if (typeof value === "number") return finiteFloat(value);

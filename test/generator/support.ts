@@ -42,12 +42,15 @@ export function attr(name: string, type: string, extra: Record<string, unknown> 
 /** Generates models (+ json codecs) into a temp dir and imports them. */
 export async function generated(
   bundle: Bundle,
-  opts: { bindings?: Bindings; json?: boolean } = {},
-): Promise<{ dir: string; models: Loaded; json: Loaded | null }> {
+  opts: { bindings?: Bindings; json?: boolean; yaml?: boolean } = {},
+): Promise<{ dir: string; models: Loaded; json: Loaded | null; yaml: Loaded | null }> {
   const dir = mkdtempSync(join(tmpdir(), "lml-review-"));
   created.push(dir);
   const contractsModule = "./contracts-shim.js";
-  const emitters = opts.json === true ? [createKeyValueEmitter("json", { contractsModule })] : [];
+  const emitters = [
+    ...(opts.json === true ? [createKeyValueEmitter("json", { contractsModule })] : []),
+    ...(opts.yaml === true ? [createKeyValueEmitter("yaml", { contractsModule })] : []),
+  ];
   const files = generateModelsWith(bundle, opts.bindings ?? { types: {} }, emitters, { contractsModule });
   for (const [path, text] of files) {
     const target = join(dir, path);
@@ -58,7 +61,8 @@ export async function generated(
   writeFileSync(join(dir, "package.json"), '{"type":"module"}\n');
   const models = (await import(pathToFileURL(join(dir, "index.ts")).href)) as Loaded;
   const json = opts.json === true ? ((await import(pathToFileURL(join(dir, "json/index.ts")).href)) as Loaded) : null;
-  return { dir, models, json };
+  const yaml = opts.yaml === true ? ((await import(pathToFileURL(join(dir, "yaml/index.ts")).href)) as Loaded) : null;
+  return { dir, models, json, yaml };
 }
 
 /** The named error code a generation/codec call raises; undefined when it succeeds. */

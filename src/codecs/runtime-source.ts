@@ -447,6 +447,8 @@ export function keyString(wire: unknown): string {
 `;
 
 const JSON_TAIL = String.raw`
+// A UTF-16 surrogate with no partner: Ruby refuses it and it has no UTF-8 spelling.
+const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
 const JSON_NUMBER = /-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?/y;
 const JSON_ESCAPES: Readonly<Record<string, string>> = {
   '"': '"', "\\": "\\", "/": "/", b: "\b", f: "\f", n: "\n", r: "\r", t: "\t",
@@ -473,7 +475,7 @@ function strictJson(src: string): unknown {
     for (;;) {
       const ch = src[pos++];
       if (ch === undefined) return bad("unterminated string");
-      if (ch === '"') return out;
+      if (ch === '"') return LONE_SURROGATE.test(out) ? bad("string is not valid Unicode (lone surrogate)") : out;
       if (ch < " ") return bad("control character in string");
       if (ch !== "\\") {
         out += ch;
@@ -614,6 +616,25 @@ export function jsonCodec<T>(
 `;
 
 const YAML_TAIL = String.raw`
+// A UTF-16 surrogate with no partner: Psych refuses it and it has no UTF-8 spelling.
+// Walks the parsed tree with an explicit stack so depth cannot overflow it.
+const YAML_LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+function hasLoneSurrogate(tree: unknown): boolean {
+  const stack: unknown[] = [tree];
+  while (stack.length > 0) {
+    const v = stack.pop();
+    if (typeof v === "string") {
+      if (YAML_LONE_SURROGATE.test(v)) return true;
+    } else if (Array.isArray(v)) {
+      for (const x of v) stack.push(x);
+    } else if (v instanceof Map) {
+      for (const [k, x] of v) stack.push(k, x);
+    } else if (v !== null && typeof v === "object") {
+      for (const [k, x] of Object.entries(v)) stack.push(k, x);
+    }
+  }
+  return false;
+}
 /** The two functions of a YAML library; supplied by the caller, never imported. */
 export interface YamlLibrary {
   parse(text: string): unknown;
@@ -656,6 +677,15 @@ export function yamlCodec<T>(
           format: "yaml",
           location: "/input",
           detail: error instanceof Error ? error.message : "invalid YAML",
+        });
+      }
+      if (hasLoneSurrogate(tree)) {
+        throw new LmlError({
+          reason: "invalid_document",
+          model_id: modelId,
+          format: "yaml",
+          location: "/input",
+          detail: "string is not valid Unicode (lone surrogate)",
         });
       }
       return decode(tree);
