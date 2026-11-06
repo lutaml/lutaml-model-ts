@@ -261,7 +261,12 @@ function neutral(v: unknown, depth: number): void {
     return;
   }
   const o = object(v);
-  for (const key of Object.keys(o)) at(key, () => neutral(o[key], depth + 1));
+  for (const key of Object.keys(o)) {
+    at(key, () => {
+      dStr(key);
+      neutral(o[key], depth + 1);
+    });
+  }
 }
 
 /** A JSON number a JS number cannot hold exactly; produced by the strict JSON reader, refused by every decoder. */
@@ -494,7 +499,8 @@ function strictJson(src: string): unknown {
     pos += m[0].length;
     const n = Number(m[0]);
     if (!Number.isFinite(n)) return bad("number " + m[0] + " is not finite");
-    if (String(n) !== m[0]) return new InexactNumber(m[0]);
+    // An integer is exact when its value survives (not when its spelling does); other numbers keep the spelling rule.
+    if (/^-?[0-9]+$/.test(m[0]) ? Object.is(n, -0) || BigInt(n) !== BigInt(m[0]) : String(n) !== m[0]) return new InexactNumber(m[0]);
     return n;
   };
   const value = (depth: number): unknown => {
@@ -520,6 +526,9 @@ function strictJson(src: string): unknown {
     if (ch === "{") {
       pos++;
       const members: Record<string, unknown> = {};
+      // JS objects list array-index keys first and ascending; a document whose order differs would be silently reordered.
+      let lastIndex = -1;
+      let sawOther = false;
       space();
       if (src[pos] === "}") {
         pos++;
@@ -532,6 +541,10 @@ function strictJson(src: string): unknown {
         space();
         if (src[pos++] !== ":") return bad("expected :");
         if (Object.hasOwn(members, key)) return wireFail("duplicate key " + JSON.stringify(key));
+        if (/^(?:0|[1-9][0-9]*)$/.test(key) && Number(key) < 4294967295) {
+          if (sawOther || Number(key) < lastIndex) return wireFail("object key order cannot be preserved at key " + JSON.stringify(key));
+          lastIndex = Number(key);
+        } else sawOther = true;
         setOwn(members, key, value(depth + 1));
         space();
         const next = src[pos++];

@@ -307,7 +307,7 @@ describe("untrusted input", () => {
     expect(reason(`${head}mappings:\n  json: !ruby/object:Object {}\n`)).toBe("invalid_document");
     expect(reason(`${head}mappings:\n  json: !!python/object/apply:os.system [id]\n`)).toBe("invalid_document");
     expect(reason(`lml: 1\nmodel: !!str M\n`)).toBe("invalid_document");
-    expect(reason(`${head}mappings:\n  json:\n    <<: {rules: []}\n`)).toBe("unsupported_mapping");
+    expect(reason(`${head}mappings:\n  json:\n    <<: {rules: []}\n`)).toBe("invalid_document"); // a merge key is refused (Psych would expand it)
   });
 
   it("rejects billion-laughs style alias expansion before expanding", () => {

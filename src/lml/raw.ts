@@ -197,7 +197,15 @@ function jsonToRaw(text: string, options: ParseOptions): Raw {
  * name rather than read one way here and another in Ruby; quote the value to keep a string.
  */
 const YAML_AMBIGUOUS = [
-  /^(?:y|n|yes|no|on|off)$/i,
+  /^(?:yes|no|on|off)$/i,
+  // Psych matches true/false case-insensitively; YAML 1.2 only true/True/TRUE (and false likewise).
+  /^(?:true|false)$/i,
+  // Psych reads 0x with _ or , separators and a signed 0x as an integer; YAML 1.2 as a string.
+  /^[-+]?0x[0-9a-fA-F_,]*[_,][0-9a-fA-F_,]*$/,
+  /^[-+]0x[0-9a-fA-F]+$/,
+  // Psych reads :name as a Symbol (disallowed by safe_load); a merge key <<.
+  /^:\S/,
+  /^<<$/,
   /^[-+]?0[0-9_]+$/,
   /^[-+]?0[ob][0-9a-fA-F_]+$/,
   /^[-+]?[0-9][0-9_]*_[0-9_]*(?:\.[0-9_]*)?$/,
@@ -207,6 +215,8 @@ const YAML_AMBIGUOUS = [
   /^[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}(?:$|[Tt\s])/,
   /^[-+]?[0-9][0-9,]*,[0-9,]*$/,
 ];
+
+const YAML_CANONICAL_BOOLEAN = /^(?:true|True|TRUE|false|False|FALSE)$/;
 
 function yamlToRaw(text: string): Raw {
   const doc = YAML.parseDocument(text, {
@@ -224,7 +234,7 @@ function yamlToRaw(text: string): Raw {
     Alias: () => fail("invalid_document", "YAML aliases are not accepted", ""),
     Node: (_key, node) => {
       if (node.anchor !== undefined) fail("invalid_document", "YAML anchors are not accepted", "");
-      if (YAML.isScalar(node) && node.type === "PLAIN" && typeof node.source === "string" && YAML_AMBIGUOUS.some((re) => re.test(node.source as string))) {
+      if (YAML.isScalar(node) && node.type === "PLAIN" && typeof node.source === "string" && !YAML_CANONICAL_BOOLEAN.test(node.source) && YAML_AMBIGUOUS.some((re) => re.test(node.source as string))) {
         fail("invalid_document", `YAML scalar ${node.source} is read differently by YAML 1.1 (Ruby); quote it`, "");
       }
       if (node.tag !== undefined) fail("invalid_document", `YAML tag ${node.tag} is not accepted`, "");

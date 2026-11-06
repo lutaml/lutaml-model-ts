@@ -41,11 +41,18 @@ describe("L7: non-finite floats raise a named LmlError, not RangeError", () => {
 
 describe("YAML 1.1 versus 1.2 ambiguous plain scalars are refused", () => {
   const read = (text: string) => parseRaw(new TextEncoder().encode(text), "yaml");
-  for (const v of ["yes", "No", "on", "off", "y", "010", "0o10", "0b11", "1_000", "1:30", "1e3", "2020-01-01", "1,000"]) {
+  for (const v of ["yes", "No", "on", "off", "010", "0o10", "0b11", "1_000", "1:30", "1e3", "2020-01-01", "1,000", "tRue", "fAlsE", "0x_1", "0x1_F", "-0x1", ":sym"]) {
     it(`refuses plain ${v}`, () => {
       expect(() => read(`a: ${v}`)).toThrow(/read differently by YAML 1.1/);
     });
   }
+  it("refuses a merge key, which Psych expands", () => {
+    expect(() => read("a: {<<: {k: 1}}")).toThrow(/read differently by YAML 1.1/);
+  });
+  it("reads y/n and the canonical booleans (Psych reads them the same way)", () => {
+    const m = read("y: y\nn: N\nt: true\nu: True\nv: FALSE\nq: ':sym'") as ReadonlyMap<string, unknown>;
+    expect([m.get("y"), m.get("n"), m.get("t"), m.get("u"), m.get("v"), m.get("q")]).toEqual(["y", "N", true, true, false, ":sym"]);
+  });
   it("reads quoted and unambiguous scalars", () => {
     const m = read("a: 'yes'\nb: 10\nc: text\nd: 1.5\ne: 0\nf: 0x1F") as ReadonlyMap<string, unknown>;
     expect(m.get("a")).toBe("yes");
