@@ -55,8 +55,14 @@ describe("round 3: strict JSON reader exactness, hash keys and order", () => {
     const codec = await hashCodec();
     expect(() => codec.parse('{"h":{"n":123456789012345680000}}')).toThrow(/cannot be held exactly/);
     expect(() => codec.parse('{"h":{"n":12345678901234567890}}')).toThrow(/cannot be held exactly/);
-    expect(codec.parse('{"h":{"n":9007199254740992}}').h.n).toBe(9007199254740992);
-    expect(codec.parse('{"h":{"n":1152921504606846976}}').h.n).toBe(2 ** 60);
+    expect(codec.parse('{"h":{"n":9007199254740991}}').h.n).toBe(9007199254740991);
+    expect(codec.parse('{"h":{"n":-9007199254740991}}').h.n).toBe(-9007199254740991);
+  });
+  it("N3: refuses an integer above 2^53 that is an exact double, never prints it rounded", async () => {
+    const codec = await hashCodec();
+    for (const n of ["1152921504606846976", "9223372036854775808", "-1152921504606846976", "9007199254740992", "9007199254740994"]) {
+      expect(() => codec.parse(`{"h":{"n":${n}}}`), n).toThrow(/cannot be held exactly/);
+    }
   });
   it("refuses a lone-surrogate hash key", async () => {
     const codec = await hashCodec();

@@ -8,7 +8,7 @@ import { generateArtifacts, staleFiles } from "./artifacts/index.js";
 import { bundleChecksum, loadBundle } from "./lml/index.js";
 import type { KeyValueFormat } from "./codecs/index.js";
 import { checkDocumentVersion } from "./version.js";
-import { listArtifactFiles, unlistedEntries, verifyArtifacts, verifyBundleChecksum } from "./lml/verify.js";
+import { ioGuard, listArtifactFiles, unlistedEntries, verifyArtifacts, verifyBundleChecksum } from "./lml/verify.js";
 
 const USAGE = `usage: lutaml-model-ts <command>
 
@@ -77,7 +77,9 @@ function readOptional(root: string, path: string): string | undefined {
     return readFileSync(join(root, path), "utf8");
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
-    throw error;
+    return ioGuard(join(root, path), () => {
+      throw error;
+    });
   }
 }
 

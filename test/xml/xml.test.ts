@@ -261,6 +261,57 @@ describe.skipIf(!available)("generated XML codecs (moxml-ts)", () => {
       expect((await codec.parse("<plain><!-- &#x0; --><v><![CDATA[&#x0;]]></v></plain>")).v).toBe("&#x0;");
     });
 
+    // N2: a reference without its ';' at the end of a text run or attribute value was decoded by the parser behind the guard.
+    for (const text of ["<plain><v>a&#0</v></plain>", "<plain><v>a&#1</v></plain>", "<plain><v>a&#x1b</v></plain>", "<plain><v>a&#xD800</v></plain>", '<plain x="a&#0"><v>b</v></plain>', "<plain><v>a&#65</v></plain>"]) {
+      it(`refuses the semicolon-less reference in ${text}`, async () => {
+        const info = await infoOf(() => mod["xml"].CODECS["XmlOracle::Plain@default"].parse(text));
+        expect(info?.reason).toBe("invalid_document");
+        expect(info?.detail).toMatch(/&#/);
+      });
+    }
+
+    // F6: an undefined entity lost its ';' and decoded to text.
+    for (const text of ["<plain><v>&nbsp;</v></plain>", "<plain><v>a&foo</v></plain>", '<plain x="&nbsp;"><v>b</v></plain>', "<plain><v>a & b</v></plain>"]) {
+      it(`refuses the undefined or bare reference in ${text}`, async () => {
+        const info = await infoOf(() => mod["xml"].CODECS["XmlOracle::Plain@default"].parse(text));
+        expect(info?.reason).toBe("invalid_document");
+        expect(info?.detail).toMatch(/not a predefined entity or a character reference/);
+      });
+    }
+
+    it("names the undefined entity with its ';'", async () => {
+      const info = await infoOf(() => mod["xml"].CODECS["XmlOracle::Plain@default"].parse("<plain><v>&nbsp;</v></plain>"));
+      expect(info?.detail).toContain("&nbsp;");
+    });
+
+    it("still reads the five predefined entities and CDATA ampersands", async () => {
+      const codec = mod["xml"].CODECS["XmlOracle::Plain@default"];
+      expect((await codec.parse("<plain><v>&lt;&gt;&amp;&quot;&apos;</v></plain>")).v).toBe("<>&\"'");
+      expect((await codec.parse("<plain><v><![CDATA[a & b &nbsp;]]></v></plain>")).v).toBe("a & b &nbsp;");
+    });
+
+    // N9: "<!-->" is an opener plus ">", not a complete comment; the guard now agrees with the parser about where the comment ends.
+    it("does not treat <!--> as a complete comment", async () => {
+      const codec = mod["xml"].CODECS["XmlOracle::Plain@default"];
+      const info = await infoOf(() => codec.parse("<plain><!--><v>z</v></plain>"));
+      expect(info?.reason).toBe("invalid_document");
+      // The comment really runs to the later "-->": a reference inside it is not read, the element after it is.
+      expect((await codec.parse("<plain><!--><v>&#0;</v>--><v>z</v></plain>")).v).toBe("z");
+    });
+
+    // N4: moxml-ts a78091f refuses >255 attributes before the wasm engine (a byte counts them) and keeps the engine usable.
+    it("refuses an element with 256 attributes, decodes 255 exactly, and the next parse still works", async () => {
+      const codec = mod["xml"].CODECS["XmlOracle::Plain@default"];
+      const attrs = (n: number): string => Array.from({ length: n }, (_, i) => ` a${i}="1"`).join("");
+      const info = await infoOf(() => codec.parse(`<plain${attrs(256)}><v>x</v></plain>`));
+      expect(info?.reason).toBe("invalid_document");
+      expect(info?.detail).toMatch(/more than 255 attributes/);
+      expect(info?.location).toBe("/input");
+      expect((await codec.parse(`<plain${attrs(255)}><v>x</v></plain>`)).v).toBe("x");
+      expect((await codec.parse(`<plain${attrs(50000)}><v>x</v></plain>`).catch((e: { info?: { reason: string } }) => e.info?.reason))).toBe("invalid_document");
+      expect((await codec.parse("<plain><v>after</v></plain>")).v).toBe("after");
+    });
+
     it("refuses a DOCTYPE before the parser sees it", async () => {
       const info = await infoOf(() => mod["xml"].CODECS["XmlOracle::Plain@default"].parse('<!DOCTYPE plain [<!ENTITY e "x">]><plain/>'));
       expect(info?.reason).toBe("invalid_document");

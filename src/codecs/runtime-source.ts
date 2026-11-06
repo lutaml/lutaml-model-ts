@@ -499,8 +499,8 @@ function strictJson(src: string): unknown {
     pos += m[0].length;
     const n = Number(m[0]);
     if (!Number.isFinite(n)) return bad("number " + m[0] + " is not finite");
-    // An integer is exact when its value survives (not when its spelling does); other numbers keep the spelling rule.
-    if (/^-?[0-9]+$/.test(m[0]) ? Object.is(n, -0) || BigInt(n) !== BigInt(m[0]) : String(n) !== m[0]) return new InexactNumber(m[0]);
+    // An integer is exact only inside the safe range (above it a double is a rounded stand-in that would print differently); other numbers keep the spelling rule.
+    if (/^-?[0-9]+$/.test(m[0]) ? Object.is(n, -0) || !Number.isSafeInteger(n) : String(n) !== m[0]) return new InexactNumber(m[0]);
     return n;
   };
   const value = (depth: number): unknown => {

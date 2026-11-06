@@ -200,21 +200,29 @@ const YAML_AMBIGUOUS = [
   /^(?:yes|no|on|off)$/i,
   // Psych matches true/false case-insensitively; YAML 1.2 only true/True/TRUE (and false likewise).
   /^(?:true|false)$/i,
+  // Psych: null in any case is nil; .inf/.nan in any case (signed .inf) are Infinity/NaN. YAML 1.2 reads these spellings as strings.
+  /^null$/i,
+  /^[-+]?\.inf$/i,
+  /^\.nan$/i,
   // Psych reads 0x with _ or , separators and a signed 0x as an integer; YAML 1.2 as a string.
   /^[-+]?0x[0-9a-fA-F_,]*[_,][0-9a-fA-F_,]*$/,
   /^[-+]0x[0-9a-fA-F]+$/,
   // Psych reads :name as a Symbol (disallowed by safe_load); a merge key <<.
   /^:\S/,
   /^<<$/,
-  /^[-+]?0[0-9_]+$/,
-  /^[-+]?0[ob][0-9a-fA-F_]+$/,
-  /^[-+]?[0-9][0-9_]*_[0-9_]*(?:\.[0-9_]*)?$/,
+  // Leading-zero octal (08 is a string to Psych, 010 is 8), 0b binary and 0o, any _ or , digit separator (1,2.5 is 12.5).
+  /^[-+]?0[0-9_,]+$/,
+  /^[-+]?0[ob][0-9a-fA-F_,]+$/,
+  /^[-+]?[0-9][0-9_,]*[_,][0-9_,]*(?:\.[0-9_,]*)?$/,
+  /^[-+]?[0-9][0-9_,]*,[0-9_,]*\.[0-9]*(?:[eE][-+][0-9]+)?$/,
   /^[-+]?[0-9][0-9_]*(?::[0-5]?[0-9])+(?:\.[0-9_]*)?$/,
   /^[-+]?(?:[0-9][0-9_]*)?\.?[0-9]+[eE][-+]?[0-9]+$/,
   /^[-+]?[0-9]+\.[0-9]*[eE][-+]?[0-9]+$/,
   /^[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}(?:$|[Tt\s])/,
-  /^[-+]?[0-9][0-9,]*,[0-9,]*$/,
 ];
+
+/** Spellings the rules above would refuse that Psych and YAML 1.2 read identically: null/Null/NULL, 00..07, a digit-dot float with a signed exponent (1.5E+3), a decimal with only trailing _ or , (a string to both). */
+const YAML_AGREED = [/^(?:null|Null|NULL)$/, /^[-+]?00*[0-7]$/, /^[-+]?[0-9]+\.[0-9]*[eE][-+][0-9]+$/, /^[-+]?[1-9][0-9]*[_,]+$/];
 
 const YAML_CANONICAL_BOOLEAN = /^(?:true|True|TRUE|false|False|FALSE)$/;
 
@@ -234,7 +242,7 @@ function yamlToRaw(text: string): Raw {
     Alias: () => fail("invalid_document", "YAML aliases are not accepted", ""),
     Node: (_key, node) => {
       if (node.anchor !== undefined) fail("invalid_document", "YAML anchors are not accepted", "");
-      if (YAML.isScalar(node) && node.type === "PLAIN" && typeof node.source === "string" && !YAML_CANONICAL_BOOLEAN.test(node.source) && YAML_AMBIGUOUS.some((re) => re.test(node.source as string))) {
+      if (YAML.isScalar(node) && node.type === "PLAIN" && typeof node.source === "string" && !YAML_CANONICAL_BOOLEAN.test(node.source) && !YAML_AGREED.some((re) => re.test(node.source as string)) && YAML_AMBIGUOUS.some((re) => re.test(node.source as string))) {
         fail("invalid_document", `YAML scalar ${node.source} is read differently by YAML 1.1 (Ruby); quote it`, "");
       }
       if (node.tag !== undefined) fail("invalid_document", `YAML tag ${node.tag} is not accepted`, "");

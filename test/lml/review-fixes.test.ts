@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { LmlError } from "../../src/contracts.js";
-import { parseRaw } from "../../src/lml/raw.js";
+import { parseRaw, RawFloat } from "../../src/lml/raw.js";
 import { loadDocument, rubyFloat } from "../../src/lml/index.js";
 
 const enc = (text: string): Uint8Array => new TextEncoder().encode(text);
@@ -58,5 +58,27 @@ describe("YAML 1.1 versus 1.2 ambiguous plain scalars are refused", () => {
     expect(m.get("a")).toBe("yes");
     expect(m.get("b")).toBe(10);
     expect(m.get("d")).toBeDefined();
+  });
+});
+
+describe("round 3 N1/N7: YAML scalars Psych types differently", () => {
+  const read = (text: string) => parseRaw(new TextEncoder().encode(text), "yaml") as ReadonlyMap<string, unknown>;
+  // Psych safe_load: nUll nil; .iNf Infinity; .nAn NaN; 1,2.5 12.5; 1,000.5 1000.5; 0,. 0.0
+  for (const v of ["nUll", "nULL", "NuLL", ".iNf", ".INF", "-.iNf", "+.Inf", ".nAn", ".NAN", "1,2.5", "1,000.5", "0,.", "1,000.5e+3", "000_,", "0b1,", "1_0,0", "08", "010", "1e3", "1_000"]) {
+    it(`refuses plain ${v}`, () => {
+      expect(() => read(`k: ${v}`)).toThrow(/read differently by YAML 1.1/);
+      expect(() => read(`${v}: x`)).toThrow(/read differently by YAML 1.1/);
+    });
+  }
+  it("still reads quoted spellings as strings", () => {
+    expect(read("k: 'nUll'\nj: \".iNf\"").get("k")).toBe("nUll");
+  });
+  // Psych and YAML 1.2 agree on these: reading them is not an over-refusal any more.
+  it.each([["00", 0], ["07", 7], ["-007", -7], ["1.5E+3", 1500], ["6.02E+23", 6.02e23], ["0.1e-2", 0.001]])("reads %s as the number Psych reads", (text, value) => {
+    const got = read(`k: ${text}`).get("k");
+    expect(got instanceof RawFloat ? got.value : Number(got)).toBe(value);
+  });
+  it.each(["10_", "1,", "1__", "5,,"])("reads %s as the string Psych reads", (text) => {
+    expect(read(`k: ${text}`).get("k")).toBe(text);
   });
 });

@@ -608,6 +608,8 @@ function refuseDuplicateAttributes(text: string): void {
 }
 
 const CHAR_REFERENCE = /&#(?:[xX]([0-9a-fA-F]+)|([0-9]+));/g;
+/** An ampersand that does not start a predefined entity or a well-formed character reference (DOCTYPE is refused, so nothing else is defined). */
+const BAD_REFERENCE = /&(?!(?:lt|gt|amp|quot|apos);|#[0-9]+;|#[xX][0-9a-fA-F]+;)[^\s&;]*;?/;
 
 /**
  * Splits text the way the parser does, into the spans where a reference is read
@@ -627,7 +629,8 @@ function referenceSpans(text: string): string[] {
     spans.push(text.slice(pos, lt));
     const skip = text.startsWith("<!--", lt) ? "-->" : text.startsWith("<![CDATA[", lt) ? "]]>" : text.startsWith("<?", lt) ? "?>" : null;
     if (skip !== null) {
-      const end = text.indexOf(skip, lt + 2);
+      // "<!-->" is not a complete comment: the "-->" must follow the "<!--" opener.
+      const end = text.indexOf(skip, lt + (skip === "-->" ? 4 : 2));
       if (end < 0) break;
       pos = end + skip.length;
       continue;
@@ -657,6 +660,8 @@ function isXmlChar(code: number): boolean {
 /** The parser silently drops or replaces a reference outside Char (&#x0;, &#xD800;, &#1114112;); refuse it. */
 function refuseInvalidCharReferences(text: string): void {
   for (const span of referenceSpans(text)) {
+    const bad = BAD_REFERENCE.exec(span);
+    if (bad !== null) xmlFail("reference " + bad[0] + " is not a predefined entity or a character reference", "/input");
     for (const m of span.matchAll(CHAR_REFERENCE)) {
       const digits = (m[1] ?? m[2] ?? "").replace(/^0+(?=.)/, "");
       const code = digits.length > 8 ? Infinity : m[1] !== undefined ? parseInt(digits, 16) : parseInt(digits, 10);
@@ -676,6 +681,11 @@ export async function parseText(text: string): Promise<Document> {
   try {
     doc = await parse(text);
   } catch (error) {
+    // moxml-ts refuses an element with more attributes than the engine can read back (reason "attribute_limit") before the wasm sees it.
+    if (error instanceof Error && (error as { reason?: unknown }).reason === "attribute_limit") {
+      const limit = (error as { limit?: unknown }).limit;
+      return xmlFail("an element has more than " + String(limit) + " attributes (" + error.message + ")", "/input");
+    }
     return xmlFail(error instanceof Error ? error.message : "malformed XML", "/input");
   }
   refuseDuplicateAttributes(text);

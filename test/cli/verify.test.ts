@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it, vi } from "vitest";
@@ -143,5 +143,76 @@ describe("generate --check extras and runtime pin", () => {
     const b = generateArtifacts({ ...input, contractsModule: "other-contracts" });
     const pin = (s: typeof a): string => (s.manifest.dependencies.find((d) => d.name === "lutaml-model-ts") as { sha256: string }).sha256;
     expect(pin(a)).not.toBe(pin(b));
+  });
+});
+
+describe("round 3 N5/N6: manifest file kinds and unreadable entries", () => {
+  const verifyIn = (dir: string, digest: string) => cli(["verify", "artifacts", dir, "--expected-sha256", digest]);
+
+  it("refuses a manifest.json FIFO without opening it (no hang)", () => {
+    const { dir, digest } = fresh();
+    rmSync(join(dir, "manifest.json"));
+    execFileSync("mkfifo", [join(dir, "manifest.json")]);
+    const r = verifyIn(dir, digest);
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain("manifest.json is not a regular file");
+  });
+
+  it("refuses a manifest.json symlink, and --check agrees", () => {
+    const { dir, digest } = fresh();
+    writeFileSync(join(SCRATCH, "outside-manifest.json"), readFileSync(join(dir, "manifest.json")));
+    rmSync(join(dir, "manifest.json"));
+    symlinkSync(join(SCRATCH, "outside-manifest.json"), join(dir, "manifest.json"));
+    const r = verifyIn(dir, digest);
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain("manifest.json is a symlink");
+    const c = cli(["generate", BUNDLE, "--bindings", BINDINGS, "--format", "json", "--out", dir, "--check"]);
+    expect(c.status).toBe(1);
+  });
+
+  it("refuses a manifest.sha256 symlink that holds the wrong digest, and a FIFO", () => {
+    const { dir, digest } = fresh();
+    expect(existsSync(join(dir, "manifest.sha256"))).toBe(true);
+    writeFileSync(join(SCRATCH, "wrong.sha256"), "sha256:00\n");
+    rmSync(join(dir, "manifest.sha256"));
+    symlinkSync(join(SCRATCH, "wrong.sha256"), join(dir, "manifest.sha256"));
+    const link = verifyIn(dir, digest);
+    expect(link.status).toBe(1);
+    expect(link.stderr).toContain("manifest.sha256 is a symlink");
+    rmSync(join(dir, "manifest.sha256"));
+    execFileSync("mkfifo", [join(dir, "manifest.sha256")]);
+    const fifo = verifyIn(dir, digest);
+    expect(fifo.status).toBe(1);
+    expect(fifo.stderr).toContain("manifest.sha256 is not a regular file");
+  });
+
+  it("reports a manifest.json directory as invalid_document, not a raw EISDIR", () => {
+    const { dir, digest } = fresh();
+    rmSync(join(dir, "manifest.json"));
+    mkdirSync(join(dir, "manifest.json"));
+    writeFileSync(join(dir, "manifest.json", "x"), "x");
+    expect(reason(() => verifyArtifacts({ root: dir, expectedSha256: digest }))).toMatch(/^invalid_document\|manifest\.json is not a regular file/);
+  });
+
+  it.skipIf(process.getuid?.() === 0)("wraps EACCES from an unreadable directory or file in an LmlError (verify and --check)", () => {
+    const { dir, digest } = fresh();
+    mkdirSync(join(dir, "locked"));
+    writeFileSync(join(dir, "locked", "f"), "x");
+    chmodSync(join(dir, "locked"), 0);
+    try {
+      expect(reason(() => verifyArtifacts({ root: dir, expectedSha256: digest }))).toMatch(/^invalid_document\|cannot read .*locked: EACCES/);
+      const c = cli(["generate", BUNDLE, "--bindings", BINDINGS, "--format", "json", "--out", dir, "--check"]);
+      expect(c.status).toBe(1);
+      expect(c.stderr).toContain("cannot read");
+      expect(c.stderr).not.toContain("error: EACCES");
+    } finally {
+      chmodSync(join(dir, "locked"), 0o755);
+    }
+    chmodSync(join(dir, "models.ts"), 0);
+    try {
+      expect(reason(() => verifyArtifacts({ root: dir, expectedSha256: digest }))).toMatch(/^invalid_document\|cannot read .*models\.ts: EACCES/);
+    } finally {
+      chmodSync(join(dir, "models.ts"), 0o644);
+    }
   });
 });
