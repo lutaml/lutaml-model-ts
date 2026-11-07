@@ -1,5 +1,5 @@
 {
-  "name": "lutaml-model-ts",
+  "name": "lutaml-ts",
   "version": "0.0.0",
   "private": true,
   "description": "Typed TypeScript target for LutaML Model LML documents",
@@ -22,7 +22,7 @@
     "./package.json": "./package.json"
   },
   "bin": {
-    "lutaml-model-ts": "dist/cli.js"
+    "lutaml-ts": "dist/cli.js"
   },
   "files": [
     "dist"
