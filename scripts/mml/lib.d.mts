@@ -1,0 +1,12 @@
+export type Tree = readonly [readonly [string, string], readonly (readonly [readonly [string, string], string])[], readonly (Tree | string)[]];
+export function treeOf(node: unknown): Tree;
+export function canonicalTree(xml: string): Promise<Tree>;
+export function stripWs(tree: Tree): Tree;
+export function dump(value: unknown): unknown;
+export const stable: (value: unknown) => string;
+export function emptyNormal(value: unknown): unknown;
+export function firstDiff(a: unknown, b: unknown, path?: string): string | null;
+export function refusalClass(info: { reason?: string; detail?: string } | undefined): string;
+export function rubyClass(row: { error: string; message: string }): string;
+export function squeezeWs(tree: Tree): Tree;
+export function causeOf(dData: string | null, dTree: string | null, squeezed: boolean): string;

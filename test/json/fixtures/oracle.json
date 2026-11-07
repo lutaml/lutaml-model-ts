@@ -1,0 +1,810 @@
+{
+  "bundle": {
+    "lml_bundle": 1,
+    "roots": [
+      "OracleModels::Kennel@default",
+      "OracleModels::Rec@default"
+    ],
+    "models": {
+      "OracleModels::Animal@default": {
+        "lml": 2,
+        "model": "OracleModels::Animal",
+        "register": "default",
+        "attributes": [
+          {
+            "name": "kind",
+            "type": {
+              "kind": "builtin",
+              "name": "string"
+            },
+            "required": false,
+            "collection": false,
+            "default": {
+              "present": false
+            },
+            "initialize_empty": false
+          },
+          {
+            "name": "name",
+            "type": {
+              "kind": "builtin",
+              "name": "string"
+            },
+            "required": false,
+            "collection": false,
+            "default": {
+              "present": false
+            },
+            "initialize_empty": false
+          }
+        ],
+        "mappings": {
+          "json": {
+            "rules": [
+              {
+                "key": [
+                  "kind"
+                ],
+                "to": "kind",
+                "render": {
+                  "nil": "omit",
+                  "empty": "omit",
+                  "default": false
+                }
+              },
+              {
+                "key": [
+                  "name"
+                ],
+                "to": "name",
+                "render": {
+                  "nil": "omit",
+                  "empty": "omit",
+                  "default": false
+                }
+              }
+            ]
+          }
+        }
+      },
+      "OracleModels::Dog@default": {
+        "lml": 2,
+        "model": "OracleModels::Dog",
+        "register": "default",
+        "attributes": [
+          {
+            "name": "kind",
+            "type": {
+              "kind": "builtin",
+              "name": "string"
+            },
+            "required": false,
+            "collection": false,
+            "default": {
+              "present": false
+            },
+            "initialize_empty": false
+          },
+          {
+            "name": "name",
+            "type": {
+              "kind": "builtin",
+              "name": "string"
+            },
+            "required": false,
+            "collection": false,
+            "default": {
+              "present": false
+            },
+            "initialize_empty": false
+          }
+        ],
+        "mappings": {
+          "json": {
+            "rules": [
+              {
+                "key": [
+                  "kind"
+                ],
+                "to": "kind",
+                "render": {
+                  "nil": "omit",
+                  "empty": "omit",
+                  "default": false
+                }
+              },
+              {
+                "key": [
+                  "name"
+                ],
+                "to": "name",
+                "render": {
+                  "nil": "omit",
+                  "empty": "omit",
+                  "default": false
+                }
+              }
+            ]
+          }
+        }
+      },
+      "OracleModels::Kennel@default": {
+        "lml": 2,
+        "model": "OracleModels::Kennel",
+        "register": "default",
+        "attributes": [
+          {
+            "name": "animals",
+            "type": {
+              "kind": "model",
+              "id": "OracleModels::Animal@default"
+            },
+            "required": false,
+            "collection": {
+              "min": 0,
+              "max": null
+            },
+            "default": {
+              "present": false
+            },
+            "initialize_empty": false
+          },
+          {
+            "name": "pet",
+            "type": {
+              "kind": "model",
+              "id": "OracleModels::Animal@default"
+            },
+            "required": false,
+            "collection": false,
+            "default": {
+              "present": false
+            },
+            "initialize_empty": false
+          },
+          {
+            "name": "owner",
+            "type": {
+              "kind": "builtin",
+              "name": "string"
+            },
+            "required": false,
+            "collection": false,
+            "default": {
+              "present": false
+            },
+            "initialize_empty": false
+          }
+        ],
+        "mappings": {
+          "json": {
+            "rules": [
+              {
+                "key": [
+                  "animals"
+                ],
+                "to": "animals",
+                "discriminator": {
+                  "attribute": "kind",
+                  "cases": {
+                    "dog": "OracleModels::Dog@default",
+                    "animal": "OracleModels::Animal@default"
+                  }
+                },
+                "render": {
+                  "nil": "omit",
+                  "empty": "omit",
+                  "default": false
+                }
+              },
+              {
+                "key": [
+                  "pet"
+                ],
+                "to": "pet",
+                "discriminator": {
+                  "attribute": "kind",
+                  "cases": {
+                    "dog": "OracleModels::Dog@default",
+                    "animal": "OracleModels::Animal@default"
+                  }
+                },
+                "render": {
+                  "nil": "omit",
+                  "empty": "omit",
+                  "default": false
+                }
+              },
+              {
+                "key": [
+                  "owner"
+                ],
+                "to": "owner",
+                "render": {
+                  "nil": "omit",
+                  "empty": "omit",
+                  "default": false
+                }
+              }
+            ]
+          }
+        }
+      },
+      "OracleModels::Rec@default": {
+        "lml": 2,
+        "model": "OracleModels::Rec",
+        "register": "default",
+        "attributes": [
+          {
+            "name": "label",
+            "type": {
+              "kind": "builtin",
+              "name": "string"
+            },
+            "required": false,
+            "collection": false,
+            "default": {
+              "present": false
+            },
+            "initialize_empty": false
+          },
+          {
+            "name": "flag",
+            "type": {
+              "kind": "builtin",
+              "name": "boolean"
+            },
+            "required": false,
+            "collection": false,
+            "default": {
+              "present": false
+            },
+            "initialize_empty": false
+          },
+          {
+            "name": "tags",
+            "type": {
+              "kind": "builtin",
+              "name": "string"
+            },
+            "required": false,
+            "collection": {
+              "min": 0,
+              "max": null
+            },
+            "default": {
+              "present": false
+            },
+            "initialize_empty": false
+          },
+          {
+            "name": "child",
+            "type": {
+              "kind": "model",
+              "id": "OracleModels::Tag@default"
+            },
+            "required": false,
+            "collection": false,
+            "default": {
+              "present": false
+            },
+            "initialize_empty": false
+          },
+          {
+            "name": "kids",
+            "type": {
+              "kind": "model",
+              "id": "OracleModels::Tag@default"
+            },
+            "required": false,
+            "collection": {
+              "min": 0,
+              "max": null
+            },
+            "default": {
+              "present": false
+            },
+            "initialize_empty": false
+          },
+          {
+            "name": "meta",
+            "type": {
+              "kind": "builtin",
+              "name": "hash"
+            },
+            "required": false,
+            "collection": false,
+            "default": {
+              "present": false
+            },
+            "initialize_empty": false
+          },
+          {
+            "name": "nn",
+            "type": {
+              "kind": "builtin",
+              "name": "string"
+            },
+            "required": false,
+            "collection": false,
+            "default": {
+              "present": false
+            },
+            "initialize_empty": false
+          },
+          {
+            "name": "ne",
+            "type": {
+              "kind": "builtin",
+              "name": "string"
+            },
+            "required": false,
+            "collection": false,
+            "default": {
+              "present": false
+            },
+            "initialize_empty": false
+          },
+          {
+            "name": "nl",
+            "type": {
+              "kind": "builtin",
+              "name": "string"
+            },
+            "required": false,
+            "collection": {
+              "min": 0,
+              "max": null
+            },
+            "default": {
+              "present": false
+            },
+            "initialize_empty": false
+          },
+          {
+            "name": "ea",
+            "type": {
+              "kind": "builtin",
+              "name": "string"
+            },
+            "required": false,
+            "collection": false,
+            "default": {
+              "present": false
+            },
+            "initialize_empty": false
+          },
+          {
+            "name": "ee",
+            "type": {
+              "kind": "builtin",
+              "name": "string"
+            },
+            "required": false,
+            "collection": false,
+            "default": {
+              "present": false
+            },
+            "initialize_empty": false
+          },
+          {
+            "name": "plain",
+            "type": {
+              "kind": "builtin",
+              "name": "string"
+            },
+            "required": false,
+            "collection": false,
+            "default": {
+              "present": false
+            },
+            "initialize_empty": false
+          }
+        ],
+        "mappings": {
+          "json": {
+            "rules": [
+              {
+                "key": [
+                  "label",
+                  "lbl",
+                  "lab"
+                ],
+                "to": "label",
+                "render": {
+                  "nil": "omit",
+                  "empty": "omit",
+                  "default": false
+                }
+              },
+              {
+                "key": [
+                  "flag"
+                ],
+                "to": "flag",
+                "render": {
+                  "nil": "omit",
+                  "empty": "omit",
+                  "default": false
+                }
+              },
+              {
+                "key": [
+                  "tags"
+                ],
+                "to": "tags",
+                "render": {
+                  "nil": "omit",
+                  "empty": "omit",
+                  "default": false
+                }
+              },
+              {
+                "key": [
+                  "child"
+                ],
+                "to": "child",
+                "render": {
+                  "nil": "omit",
+                  "empty": "omit",
+                  "default": false
+                }
+              },
+              {
+                "key": [
+                  "kids"
+                ],
+                "to": "kids",
+                "render": {
+                  "nil": "omit",
+                  "empty": "omit",
+                  "default": false
+                }
+              },
+              {
+                "key": [
+                  "meta"
+                ],
+                "to": "meta",
+                "render": {
+                  "nil": "omit",
+                  "empty": "omit",
+                  "default": false
+                }
+              },
+              {
+                "key": [
+                  "nn"
+                ],
+                "to": "nn",
+                "render": {
+                  "nil": "as_nil",
+                  "empty": "omit",
+                  "default": false
+                }
+              },
+              {
+                "key": [
+                  "ne"
+                ],
+                "to": "ne",
+                "render": {
+                  "nil": "as_empty",
+                  "empty": "omit",
+                  "default": false
+                }
+              },
+              {
+                "key": [
+                  "nl"
+                ],
+                "to": "nl",
+                "render": {
+                  "nil": "as_empty",
+                  "empty": "omit",
+                  "default": false
+                }
+              },
+              {
+                "key": [
+                  "ea"
+                ],
+                "to": "ea",
+                "render": {
+                  "nil": "omit",
+                  "empty": "as_nil",
+                  "default": false
+                }
+              },
+              {
+                "key": [
+                  "ee"
+                ],
+                "to": "ee",
+                "render": {
+                  "nil": "omit",
+                  "empty": "as_empty",
+                  "default": false
+                }
+              },
+              {
+                "key": [
+                  "plain"
+                ],
+                "to": "plain",
+                "render": {
+                  "nil": "omit",
+                  "empty": "omit",
+                  "default": false
+                }
+              }
+            ]
+          }
+        }
+      },
+      "OracleModels::Tag@default": {
+        "lml": 2,
+        "model": "OracleModels::Tag",
+        "register": "default",
+        "attributes": [
+          {
+            "name": "name",
+            "type": {
+              "kind": "builtin",
+              "name": "string"
+            },
+            "required": false,
+            "collection": false,
+            "default": {
+              "present": false
+            },
+            "initialize_empty": false
+          }
+        ],
+        "mappings": {
+          "json": {
+            "rules": [
+              {
+                "key": [
+                  "name"
+                ],
+                "to": "name",
+                "render": {
+                  "nil": "omit",
+                  "empty": "omit",
+                  "default": false
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    "value_types": {},
+    "capabilities": [
+      "json"
+    ]
+  },
+  "cases": [
+    {
+      "id": "rec-empty-object",
+      "model_id": "OracleModels::Rec@default",
+      "input": "{}",
+      "expected_output": "{\"nn\":null,\"ne\":\"\",\"nl\":[]}",
+      "ruby_class": "OracleModels::Rec"
+    },
+    {
+      "id": "rec-scalars",
+      "model_id": "OracleModels::Rec@default",
+      "input": "{\"label\":\"L\",\"flag\":true,\"plain\":\"p\"}",
+      "expected_output": "{\"label\":\"L\",\"flag\":true,\"nn\":null,\"ne\":\"\",\"nl\":[],\"plain\":\"p\"}",
+      "ruby_class": "OracleModels::Rec"
+    },
+    {
+      "id": "rec-flag-false",
+      "model_id": "OracleModels::Rec@default",
+      "input": "{\"flag\":false}",
+      "expected_output": "{\"flag\":false,\"nn\":null,\"ne\":\"\",\"nl\":[]}",
+      "ruby_class": "OracleModels::Rec"
+    },
+    {
+      "id": "rec-alias-first",
+      "model_id": "OracleModels::Rec@default",
+      "input": "{\"lbl\":\"via lbl\"}",
+      "expected_output": "{\"label\":\"via lbl\",\"nn\":null,\"ne\":\"\",\"nl\":[]}",
+      "ruby_class": "OracleModels::Rec"
+    },
+    {
+      "id": "rec-alias-third",
+      "model_id": "OracleModels::Rec@default",
+      "input": "{\"lab\":\"via lab\"}",
+      "expected_output": "{\"label\":\"via lab\",\"nn\":null,\"ne\":\"\",\"nl\":[]}",
+      "ruby_class": "OracleModels::Rec"
+    },
+    {
+      "id": "rec-alias-both-order-a",
+      "model_id": "OracleModels::Rec@default",
+      "input": "{\"label\":\"A\",\"lbl\":\"B\"}",
+      "expected_output": "{\"label\":\"A\",\"nn\":null,\"ne\":\"\",\"nl\":[]}",
+      "ruby_class": "OracleModels::Rec"
+    },
+    {
+      "id": "rec-alias-both-order-b",
+      "model_id": "OracleModels::Rec@default",
+      "input": "{\"lbl\":\"B\",\"label\":\"A\"}",
+      "expected_output": "{\"label\":\"A\",\"nn\":null,\"ne\":\"\",\"nl\":[]}",
+      "ruby_class": "OracleModels::Rec"
+    },
+    {
+      "id": "rec-tags",
+      "model_id": "OracleModels::Rec@default",
+      "input": "{\"tags\":[\"a\",\"b\"]}",
+      "expected_output": "{\"tags\":[\"a\",\"b\"],\"nn\":null,\"ne\":\"\",\"nl\":[]}",
+      "ruby_class": "OracleModels::Rec"
+    },
+    {
+      "id": "rec-tags-empty-omitted",
+      "model_id": "OracleModels::Rec@default",
+      "input": "{\"tags\":[]}",
+      "expected_output": "{\"nn\":null,\"ne\":\"\",\"nl\":[]}",
+      "ruby_class": "OracleModels::Rec"
+    },
+    {
+      "id": "rec-key-order-is-declaration-order",
+      "model_id": "OracleModels::Rec@default",
+      "input": "{\"plain\":\"z\",\"flag\":true,\"label\":\"a\"}",
+      "expected_output": "{\"label\":\"a\",\"flag\":true,\"nn\":null,\"ne\":\"\",\"nl\":[],\"plain\":\"z\"}",
+      "ruby_class": "OracleModels::Rec"
+    },
+    {
+      "id": "rec-nested",
+      "model_id": "OracleModels::Rec@default",
+      "input": "{\"child\":{\"name\":\"c\"},\"kids\":[{\"name\":\"k1\"},{\"name\":\"k2\"}]}",
+      "expected_output": "{\"child\":{\"name\":\"c\"},\"kids\":[{\"name\":\"k1\"},{\"name\":\"k2\"}],\"nn\":null,\"ne\":\"\",\"nl\":[]}",
+      "ruby_class": "OracleModels::Rec"
+    },
+    {
+      "id": "rec-meta-hash",
+      "model_id": "OracleModels::Rec@default",
+      "input": "{\"meta\":{\"a\":[1,{\"b\":null}],\"c\":\"d\"}}",
+      "expected_output": "{\"meta\":{\"a\":[1,{\"b\":null}],\"c\":\"d\"},\"nn\":null,\"ne\":\"\",\"nl\":[]}",
+      "ruby_class": "OracleModels::Rec"
+    },
+    {
+      "id": "rec-meta-empty-hash-omitted",
+      "model_id": "OracleModels::Rec@default",
+      "input": "{\"meta\":{}}",
+      "expected_output": "{\"nn\":null,\"ne\":\"\",\"nl\":[]}",
+      "ruby_class": "OracleModels::Rec"
+    },
+    {
+      "id": "rec-null-renders-as-nil",
+      "model_id": "OracleModels::Rec@default",
+      "input": "{\"nn\":null}",
+      "expected_output": "{\"nn\":null,\"ne\":\"\",\"nl\":[]}",
+      "ruby_class": "OracleModels::Rec"
+    },
+    {
+      "id": "rec-absent-renders-as-nil",
+      "model_id": "OracleModels::Rec@default",
+      "input": "{}",
+      "expected_output": "{\"nn\":null,\"ne\":\"\",\"nl\":[]}",
+      "ruby_class": "OracleModels::Rec"
+    },
+    {
+      "id": "rec-null-as-empty-scalar",
+      "model_id": "OracleModels::Rec@default",
+      "input": "{\"ne\":null}",
+      "expected_output": "{\"nn\":null,\"ne\":\"\",\"nl\":[]}",
+      "ruby_class": "OracleModels::Rec"
+    },
+    {
+      "id": "rec-null-as-empty-list",
+      "model_id": "OracleModels::Rec@default",
+      "input": "{\"nl\":null}",
+      "expected_output": "{\"nn\":null,\"ne\":\"\",\"nl\":[]}",
+      "ruby_class": "OracleModels::Rec"
+    },
+    {
+      "id": "rec-empty-as-nil",
+      "model_id": "OracleModels::Rec@default",
+      "input": "{\"ea\":\"\"}",
+      "expected_output": "{\"nn\":null,\"ne\":\"\",\"nl\":[],\"ea\":null}",
+      "ruby_class": "OracleModels::Rec"
+    },
+    {
+      "id": "rec-empty-as-empty",
+      "model_id": "OracleModels::Rec@default",
+      "input": "{\"ee\":\"\"}",
+      "expected_output": "{\"nn\":null,\"ne\":\"\",\"nl\":[],\"ee\":\"\"}",
+      "ruby_class": "OracleModels::Rec"
+    },
+    {
+      "id": "rec-empty-default-omit",
+      "model_id": "OracleModels::Rec@default",
+      "input": "{\"plain\":\"\"}",
+      "expected_output": "{\"nn\":null,\"ne\":\"\",\"nl\":[]}",
+      "ruby_class": "OracleModels::Rec"
+    },
+    {
+      "id": "rec-unknown-keys-ignored",
+      "model_id": "OracleModels::Rec@default",
+      "input": "{\"plain\":\"p\",\"zzz\":1}",
+      "expected_output": "{\"nn\":null,\"ne\":\"\",\"nl\":[],\"plain\":\"p\"}",
+      "ruby_class": "OracleModels::Rec"
+    },
+    {
+      "id": "rec-document-array",
+      "model_id": "OracleModels::Rec@default",
+      "input": "[1]",
+      "expected_error": "Lutaml::Model::InvalidFormatError"
+    },
+    {
+      "id": "rec-document-string",
+      "model_id": "OracleModels::Rec@default",
+      "input": "\"s\"",
+      "expected_error": "Lutaml::Model::InvalidFormatError"
+    },
+    {
+      "id": "rec-lone-value-wrapped",
+      "model_id": "OracleModels::Rec@default",
+      "input": "{\"tags\":\"solo\"}",
+      "divergence": "ts-keeps-lone-value-wrap",
+      "expected_output": "{\"tags\":[\"solo\"],\"nn\":null,\"ne\":\"\",\"nl\":[]}",
+      "ruby_class": "OracleModels::Rec"
+    },
+    {
+      "id": "rec-number-for-string",
+      "model_id": "OracleModels::Rec@default",
+      "input": "{\"plain\":5}",
+      "divergence": "ruby-lenient-ts-strict",
+      "expected_output": "{\"nn\":null,\"ne\":\"\",\"nl\":[],\"plain\":\"5\"}",
+      "ruby_class": "OracleModels::Rec"
+    },
+    {
+      "id": "rec-string-for-boolean",
+      "model_id": "OracleModels::Rec@default",
+      "input": "{\"flag\":\"true\"}",
+      "divergence": "ruby-lenient-ts-strict",
+      "expected_output": "{\"flag\":true,\"nn\":null,\"ne\":\"\",\"nl\":[]}",
+      "ruby_class": "OracleModels::Rec"
+    },
+    {
+      "id": "kennel-poly-list",
+      "model_id": "OracleModels::Kennel@default",
+      "input": "{\"animals\":[{\"kind\":\"dog\",\"name\":\"Rex\"},{\"kind\":\"animal\",\"name\":\"Tom\"}],\"owner\":\"Ann\"}",
+      "expected_output": "{\"animals\":[{\"kind\":\"dog\",\"name\":\"Rex\"},{\"kind\":\"animal\",\"name\":\"Tom\"}],\"owner\":\"Ann\"}",
+      "ruby_class": "OracleModels::Kennel",
+      "ruby_classes": [
+        "Dog",
+        "Animal"
+      ]
+    },
+    {
+      "id": "kennel-poly-single",
+      "model_id": "OracleModels::Kennel@default",
+      "input": "{\"pet\":{\"kind\":\"dog\",\"name\":\"Rex\"}}",
+      "expected_output": "{\"pet\":{\"kind\":\"dog\",\"name\":\"Rex\"}}",
+      "ruby_class": "OracleModels::Kennel",
+      "ruby_classes": [
+        "Dog"
+      ]
+    },
+    {
+      "id": "kennel-poly-unknown-kind",
+      "model_id": "OracleModels::Kennel@default",
+      "input": "{\"pet\":{\"kind\":\"cat\",\"name\":\"Tom\"}}",
+      "expected_error": "TypeError"
+    },
+    {
+      "id": "kennel-poly-missing-kind",
+      "model_id": "OracleModels::Kennel@default",
+      "input": "{\"pet\":{\"name\":\"Tom\"}}",
+      "expected_output": "{\"pet\":{\"name\":\"Tom\"}}",
+      "ruby_class": "OracleModels::Kennel",
+      "ruby_classes": [
+        "Animal"
+      ]
+    }
+  ]
+}

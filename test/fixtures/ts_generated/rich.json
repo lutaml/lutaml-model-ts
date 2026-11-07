@@ -1,0 +1,96 @@
+{
+  "lml_bundle": 1,
+  "roots": ["Shop::Bundle@default"],
+  "models": {
+    "Shop::Bundle@default": {
+      "lml": 2, "model": "Shop::Bundle", "register": "default",
+      "attributes": [
+        {"name": "items", "type": {"kind": "model", "id": "Shop::Item@default"}, "required": true,
+         "collection": {"min": 1, "max": null}, "default": {"present": false}, "initialize_empty": false},
+        {"name": "owner", "type": {"kind": "model", "id": "Shop::Item@default"}, "required": false,
+         "collection": false, "default": {"present": false}, "initialize_empty": false},
+        {"name": "note", "type": {"kind": "builtin", "name": "string"}, "required": false,
+         "collection": false, "default": {"present": false}, "initialize_empty": false}
+      ],
+      "mappings": {},
+      "ordered_content": {"member": "__lml_content", "version": 1}
+    },
+    "Shop::Circle@default": {
+      "lml": 2, "model": "Shop::Circle", "register": "default",
+      "attributes": [
+        {"name": "radius", "type": {"kind": "builtin", "name": "integer"}, "required": true,
+         "collection": false, "default": {"present": false}, "initialize_empty": false}
+      ],
+      "mappings": {}
+    },
+    "Shop::Holder@default": {
+      "lml": 2, "model": "Shop::Holder", "register": "default",
+      "attributes": [
+        {"name": "thing", "type": {"kind": "model", "id": "Shop::Circle@default"}, "required": false,
+         "collection": false, "default": {"present": false}, "initialize_empty": false,
+         "discriminator": {"attribute": "kind", "cases": {"c": "Shop::Circle@default", "s": "Shop::Square@default"}}}
+      ],
+      "mappings": {}
+    },
+    "Shop::Item@alt": {
+      "lml": 2, "model": "Shop::Item", "register": "alt",
+      "attributes": [
+        {"name": "x-y", "type": {"kind": "builtin", "name": "string"}, "required": false,
+         "collection": false, "default": {"present": false}, "initialize_empty": false}
+      ],
+      "mappings": {}
+    },
+    "Shop::Item@default": {
+      "lml": 2, "model": "Shop::Item", "register": "default",
+      "attributes": [
+        {"name": "sku", "type": {"kind": "value", "id": "sku"}, "required": true,
+         "collection": false, "default": {"present": false}, "initialize_empty": false},
+        {"name": "qty", "type": {"kind": "value", "id": "qty"}, "required": false,
+         "collection": false, "default": {"present": true, "value": 1}, "initialize_empty": false},
+        {"name": "label", "type": {"kind": "builtin", "name": "string"}, "required": false,
+         "collection": false, "default": {"present": false}, "initialize_empty": false},
+        {"name": "status", "type": {"kind": "builtin", "name": "string"}, "required": true,
+         "collection": false, "default": {"present": true, "value": "draft"}, "initialize_empty": false,
+         "values": ["draft", "live"]},
+        {"name": "level", "type": {"kind": "builtin", "name": "integer"}, "required": false,
+         "collection": false, "default": {"present": false}, "initialize_empty": false,
+         "values": [1, 2, 3]},
+        {"name": "tags", "type": {"kind": "builtin", "name": "token"}, "required": false,
+         "collection": {"min": 0, "max": 3}, "default": {"present": false}, "initialize_empty": true},
+        {"name": "price", "type": {"kind": "builtin", "name": "decimal"}, "required": false,
+         "collection": false, "default": {"present": true, "value": "9.50"}, "initialize_empty": false},
+        {"name": "ref", "type": {"kind": "value", "id": "xml_id"}, "required": false,
+         "collection": false, "default": {"present": false}, "initialize_empty": false},
+        {"name": "released", "type": {"kind": "builtin", "name": "date"}, "required": false,
+         "collection": false, "default": {"present": false}, "initialize_empty": false},
+        {"name": "span", "type": {"kind": "builtin", "name": "duration"}, "required": false,
+         "collection": false, "default": {"present": false}, "initialize_empty": false},
+        {"name": "blob", "type": {"kind": "builtin", "name": "base64_binary"}, "required": false,
+         "collection": false, "default": {"present": true, "value": "AQID"}, "initialize_empty": false},
+        {"name": "meta", "type": {"kind": "builtin", "name": "hash"}, "required": false,
+         "collection": false, "default": {"present": false}, "initialize_empty": false},
+        {"name": "qn", "type": {"kind": "builtin", "name": "qname"}, "required": false,
+         "collection": false, "default": {"present": false}, "initialize_empty": false},
+        {"name": "flag", "type": {"kind": "builtin", "name": "boolean"}, "required": false,
+         "collection": false, "default": {"present": true, "value": false}, "initialize_empty": false},
+        {"name": "bundle", "type": {"kind": "model", "id": "Shop::Bundle@default"}, "required": false,
+         "collection": false, "default": {"present": false}, "initialize_empty": false}
+      ],
+      "mappings": {}
+    },
+    "Shop::Square@default": {
+      "lml": 2, "model": "Shop::Square", "register": "default",
+      "attributes": [
+        {"name": "side", "type": {"kind": "builtin", "name": "integer"}, "required": true,
+         "collection": false, "default": {"present": false}, "initialize_empty": false}
+      ],
+      "mappings": {}
+    }
+  },
+  "value_types": {
+    "qty": {"base": "integer", "facets": {"min_inclusive": 0, "max_inclusive": 100}},
+    "sku": {"base": "string", "facets": {"pattern": "[A-Z]{3}-[0-9]{4}"}},
+    "xml_id": {"base": "token", "facets": {}}
+  },
+  "capabilities": ["json"]
+}

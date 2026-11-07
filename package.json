@@ -1,0 +1,44 @@
+{
+  "name": "lutaml-ts",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Typed TypeScript target for LutaML Model LML documents",
+  "type": "module",
+  "license": "BSD-2-Clause",
+  "engines": {
+    "node": ">=22"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./exact": {
+      "types": "./dist/codecs/exact.d.ts",
+      "default": "./dist/codecs/exact.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "lutaml-ts": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "moxml-ts": "git+https://github.com/lutaml/moxml-ts.git#a78091f7b11bb350fdd18a8dc6e12b3ae39661fd",
+    "yaml": "2.9.1"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "typescript": "6.0.3",
+    "vitest": "4.1.12"
+  }
+}
